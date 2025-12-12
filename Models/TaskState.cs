@@ -19,6 +19,7 @@ namespace ControleTarefasWinForms.Models
         /// Tarefa já foi clicada neste ciclo, mas não é a ativa
         /// </summary>
         JaClicada,
-        Pausada
+        Pausada,
+        Desabilitada
     }
 }

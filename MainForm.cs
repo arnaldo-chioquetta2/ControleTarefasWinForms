@@ -15,9 +15,11 @@ namespace ControleTarefasWinForms
     {
         // Lista de tarefas em memória
         private List<TaskModel> _tasks;
-        private bool _isDragging = false;
-        private Button _dragButton = null;
-
+        //private bool _isDragging = false;
+        //private Button _dragButton = null;
+        private Button _dragButton;
+        private Point _dragStartPoint;
+        private bool _dragArmed;
 
         // Tarefa atualmente ativa (contando tempo)
         private TaskModel _activeTask;
@@ -51,12 +53,12 @@ namespace ControleTarefasWinForms
                 _nextId = _tasks.Max(t => t.Id) + 1;
             }
 
-            // Reseta todas as tarefas para Pendente ao iniciar
-            // (não continua contagem de sessão anterior)
             foreach (var task in _tasks)
             {
-                task.State = TaskState.Pendente;
                 task.LastStartTime = null;
+
+                if (task.State == TaskState.Ativa)
+                    task.State = TaskState.Pausada;
             }
 
             // Cria os botões e atualiza a interface
@@ -82,6 +84,36 @@ namespace ControleTarefasWinForms
                 flpTasks.Controls.Add(button);
             }
         }
+
+        private void BotaoTarefa_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+                return;
+
+            _dragButton = sender as Button;
+            _dragStartPoint = e.Location;
+            _dragArmed = true;
+        }
+
+        private void BotaoTarefa_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_dragArmed || _dragButton == null)
+                return;
+
+            Rectangle dragRect = new Rectangle(
+                _dragStartPoint.X - SystemInformation.DragSize.Width / 2,
+                _dragStartPoint.Y - SystemInformation.DragSize.Height / 2,
+                SystemInformation.DragSize.Width,
+                SystemInformation.DragSize.Height
+            );
+
+            if (!dragRect.Contains(e.Location))
+            {
+                _dragArmed = false;
+                DoDragDrop(_dragButton, DragDropEffects.Move);
+            }
+        }
+
 
         /// <summary>
         /// Cria um botão individual para uma tarefa
@@ -111,6 +143,8 @@ namespace ControleTarefasWinForms
 
         private void BotaoTarefa_MouseUp(object sender, MouseEventArgs e)
         {
+            _dragArmed = false;
+
             if (e.Button != MouseButtons.Right)
                 return;
 
@@ -594,26 +628,6 @@ namespace ControleTarefasWinForms
                 }
             }
         }
-
-        private void BotaoTarefa_MouseDown(object sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                _dragButton = sender as Button;
-                _isDragging = true;
-            }
-        }
-
-        private void BotaoTarefa_MouseMove(object sender, MouseEventArgs e)
-        {
-            if (_isDragging && _dragButton != null)
-            {
-                // Inicia o processo de drag & drop
-                DoDragDrop(_dragButton, DragDropEffects.Move);
-                _isDragging = false;
-            }
-        }
-
 
         private void FlpTasks_DragOver(object sender, DragEventArgs e)
         {
