@@ -155,16 +155,48 @@ namespace ControleTarefasWinForms
                 return;
 
             var result = MessageBox.Show(
-                $"Deseja realmente apagar a tarefa \"{task.Name}\"?",
-                "Confirmar exclusão",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
+                $"O que deseja fazer com a tarefa \"{task.Name}\"?\n\n" +
+                "Sim = Desabilitar / Reabilitar\n" +
+                "Não = Excluir\n" +
+                "Cancelar = Nada",
+                "Opções da tarefa",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question);
 
             if (result == DialogResult.Yes)
+            {
+                // Alternar desabilitado
+                if (task.State == TaskState.Desabilitada)
+                {
+                    task.State = TaskState.Pendente;
+                }
+                else
+                {
+                    // Se estava ativa, encerra
+                    if (_activeTask != null && _activeTask.Id == task.Id)
+                    {
+                        if (_activeTask.LastStartTime.HasValue)
+                        {
+                            var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
+                            _activeTask.TotalTime = _activeTask.TotalTime.Add(elapsed);
+                        }
+
+                        _activeTask.LastStartTime = null;
+                        _activeTask = null;
+                    }
+
+                    task.State = TaskState.Desabilitada;
+                }
+
+                AtualizarInterfaceTarefas();
+                _repository.SalvarTarefas(_tasks);
+            }
+            else if (result == DialogResult.No)
             {
                 ApagarTarefa(task);
             }
         }
+
 
         private void ApagarTarefa(TaskModel task)
         {
@@ -229,6 +261,10 @@ namespace ControleTarefasWinForms
                 case TaskState.Pausada:
                     // cor de pausa – escolha a que achar melhor
                     button.BackColor = Color.Khaki;      // ou LightYellow, Orange, etc.
+                    button.ForeColor = Color.Black;
+                    break;
+                case TaskState.Desabilitada:
+                    button.BackColor = Color.White;
                     button.ForeColor = Color.Black;
                     break;
             }
@@ -335,8 +371,10 @@ namespace ControleTarefasWinForms
             {
                 foreach (var task in _tasks)
                 {
-                    task.State = TaskState.Pendente;
+                    if (task.State != TaskState.Desabilitada)
+                        task.State = TaskState.Pendente;
                 }
+
             }
             else
             {
@@ -358,100 +396,7 @@ namespace ControleTarefasWinForms
             // 6. Timer de minimizar
             timerMinimize.Stop();
             timerMinimize.Start();
-        }
-
-        //private void BotaoTarefa_Click(object sender, EventArgs e)
-        //{
-        //    var button = sender as Button;
-        //    var clickedTask = button.Tag as TaskModel;
-
-        //    if (clickedTask == null) return;
-
-        //    //
-        //    // >>> NOVA REGRA <<<
-        //    //
-        //    // Se clicou novamente na tarefa ativa → parar contagem, virar "JáClicada" e ficar sem tarefa ativa
-        //    //
-        //    if (_activeTask != null && _activeTask.Id == clickedTask.Id)
-        //    {
-        //        // Finaliza a contagem
-        //        if (_activeTask.LastStartTime.HasValue)
-        //        {
-        //            var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
-        //            _activeTask.TotalTime = _activeTask.TotalTime.Add(elapsed);
-        //        }
-
-        //        // Define como "Já clicada"
-        //        _activeTask.State = TaskState.JaClicada;
-        //        _activeTask.LastStartTime = null;
-
-        //        // Nenhuma tarefa ativa
-        //        _activeTask = null;
-
-        //        // Atualizar interface e salvar
-        //        AtualizarInterfaceTarefas();
-        //        _repository.SalvarTarefas(_tasks);
-        //        return;
-        //    }
-
-
-
-        //    //
-        //    // >>> LÓGICA NORMAL (quando clica em outra tarefa diferente da ativa) <<<
-        //    //
-
-        //    // 1. Atualizar tempo da tarefa anteriormente ativa
-        //    if (_activeTask != null && _activeTask.LastStartTime.HasValue)
-        //    {
-        //        var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
-        //        _activeTask.TotalTime = _activeTask.TotalTime.Add(elapsed);
-        //        _activeTask.LastStartTime = null;
-        //    }
-
-        //    // 2. Verificar se precisa resetar o ciclo
-        //    bool resetarCiclo = false;
-
-        //    if (_activeTask != null)
-        //    {
-        //        var ultimaTarefa = _tasks.LastOrDefault();
-        //        if (ultimaTarefa != null &&
-        //            _activeTask.Id == ultimaTarefa.Id &&
-        //            clickedTask.Id != ultimaTarefa.Id)
-        //        {
-        //            resetarCiclo = true;
-        //        }
-        //    }
-
-        //    if (resetarCiclo)
-        //    {
-        //        foreach (var task in _tasks)
-        //        {
-        //            task.State = TaskState.Pendente;
-        //        }
-        //    }
-        //    else
-        //    {
-        //        if (_activeTask != null)
-        //        {
-        //            _activeTask.State = TaskState.JaClicada;
-        //        }
-        //    }
-
-        //    // 3. Define a nova tarefa ativa
-        //    _activeTask = clickedTask;
-        //    _activeTask.State = TaskState.Ativa;
-        //    _activeTask.LastStartTime = DateTime.Now;
-
-        //    // 4. Atualizar interface
-        //    AtualizarInterfaceTarefas();
-
-        //    // 5. Salvar
-        //    _repository.SalvarTarefas(_tasks);
-
-        //    // 6. Timer de minimização
-        //    timerMinimize.Stop();
-        //    timerMinimize.Start();
-        //}
+        }        
 
 
         /// <summary>
