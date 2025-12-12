@@ -74,7 +74,7 @@ namespace ControleTarefasWinForms
         /// </summary>
         private void CriarBotoesTarefas()
         {
-            flpTasks.Controls.Clear();
+            flpTasks.Controls.Clear();F
 
             foreach (var task in _tasks)
             {
@@ -271,28 +271,21 @@ namespace ControleTarefasWinForms
 
             button.Text = $"{task.Name} - {task.FormattedTime}";
         }
-        
 
-        /// <summary>
-        /// Evento de clique em um botão de tarefa
-        /// </summary>
         private void BotaoTarefa_Click(object sender, EventArgs e)
         {
             var button = sender as Button;
-            var clickedTask = button.Tag as TaskModel;
+            var clickedTask = button?.Tag as TaskModel;
 
-            if (clickedTask == null) return;
+            if (clickedTask == null)
+                return;
 
             //
-            // >>> NOVA REGRA 1 <<<
-            // Se clicar novamente na tarefa ATIVA:
-            // - Para contagem
-            // - Vira PAUSADA
-            // - Nenhuma tarefa fica ativa
+            // REGRA 1
+            // Clicar novamente na tarefa ATIVA → pausa
             //
             if (_activeTask != null && _activeTask.Id == clickedTask.Id)
             {
-                // Finaliza a contagem
                 if (_activeTask.LastStartTime.HasValue)
                 {
                     var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
@@ -301,8 +294,6 @@ namespace ControleTarefasWinForms
 
                 _activeTask.State = TaskState.Pausada;
                 _activeTask.LastStartTime = null;
-
-                // Fica sem tarefa ativa
                 _activeTask = null;
 
                 AtualizarInterfaceTarefas();
@@ -311,13 +302,11 @@ namespace ControleTarefasWinForms
             }
 
             //
-            // >>> NOVA REGRA 2 <<<
-            // Se a tarefa clicada estava PAUSADA:
-            // Ela volta a ficar ATIVA
+            // REGRA 2
+            // Clicar em uma tarefa PAUSADA → volta a ser ATIVA
             //
             if (clickedTask.State == TaskState.Pausada)
             {
-                // Nenhuma outra tarefa ativa
                 if (_activeTask != null && _activeTask.LastStartTime.HasValue)
                 {
                     var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
@@ -326,7 +315,6 @@ namespace ControleTarefasWinForms
                     _activeTask.State = TaskState.JaClicada;
                 }
 
-                // Agora esta tarefa volta para ativa
                 _activeTask = clickedTask;
                 _activeTask.State = TaskState.Ativa;
                 _activeTask.LastStartTime = DateTime.Now;
@@ -334,18 +322,17 @@ namespace ControleTarefasWinForms
                 AtualizarInterfaceTarefas();
                 _repository.SalvarTarefas(_tasks);
 
-                // Timer de minimizar
                 timerMinimize.Stop();
                 timerMinimize.Start();
                 return;
             }
 
-
             //
-            // >>> LÓGICA NORMAL (clique em outra tarefa diferente da ativa) <<<
+            // LÓGICA NORMAL
+            // Clique em OUTRA tarefa
             //
 
-            // 1. Finaliza contagem da tarefa anteriormente ativa
+            // 1. Finaliza contagem da tarefa ativa (se houver)
             if (_activeTask != null && _activeTask.LastStartTime.HasValue)
             {
                 var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
@@ -353,15 +340,31 @@ namespace ControleTarefasWinForms
                 _activeTask.LastStartTime = null;
             }
 
-            // 2. Verificar se precisa resetar o ciclo
+            // 2. Se existir alguma tarefa PAUSADA (diferente da clicada),
+            // ela vira "JáClicada"
+            var tarefaPausada = _tasks
+                .FirstOrDefault(t => t.State == TaskState.Pausada && t.Id != clickedTask.Id);
+
+            if (tarefaPausada != null)
+            {
+                tarefaPausada.State = TaskState.JaClicada;
+            }
+
+            // 3. Obter lista de tarefas válidas (ignora desabilitadas)
+            var tarefasValidas = _tasks
+                .Where(t => t.State != TaskState.Desabilitada)
+                .ToList();
+
+            // 4. Verificar se precisa resetar o ciclo
             bool resetarCiclo = false;
 
             if (_activeTask != null)
             {
-                var ultimaTarefa = _tasks.LastOrDefault();
-                if (ultimaTarefa != null &&
-                    _activeTask.Id == ultimaTarefa.Id &&
-                    clickedTask.Id != ultimaTarefa.Id)
+                var ultimaTarefaValida = tarefasValidas.LastOrDefault();
+
+                if (ultimaTarefaValida != null &&
+                    _activeTask.Id == ultimaTarefaValida.Id &&
+                    clickedTask.Id != ultimaTarefaValida.Id)
                 {
                     resetarCiclo = true;
                 }
@@ -374,7 +377,6 @@ namespace ControleTarefasWinForms
                     if (task.State != TaskState.Desabilitada)
                         task.State = TaskState.Pendente;
                 }
-
             }
             else
             {
@@ -382,22 +384,19 @@ namespace ControleTarefasWinForms
                     _activeTask.State = TaskState.JaClicada;
             }
 
-            // 3. Define a nova tarefa ativa
+            // 5. Ativa a nova tarefa
             _activeTask = clickedTask;
             _activeTask.State = TaskState.Ativa;
             _activeTask.LastStartTime = DateTime.Now;
 
-            // 4. Atualiza a interface
+            // 6. Atualiza UI e salva
             AtualizarInterfaceTarefas();
-
-            // 5. Salvar
             _repository.SalvarTarefas(_tasks);
 
-            // 6. Timer de minimizar
+            // 7. Minimiza após 2 segundos
             timerMinimize.Stop();
             timerMinimize.Start();
-        }        
-
+        }
 
         /// <summary>
         /// Atualiza todos os botões e o DataGridView
