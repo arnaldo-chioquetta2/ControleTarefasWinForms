@@ -2,15 +2,12 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-// General Information about an assembly is controlled through the following
-// set of attributes. Change these attribute values to modify the information
-// associated with an assembly.
-[assembly: AssemblyTitle("ControleTarefasWinForms")]
-[assembly: AssemblyDescription("Aplicativo Desktop para Controle de Tarefas")]
+[assembly: AssemblyTitle("Controle de Tarefas")]
+[assembly: AssemblyDescription("Aplicativo desktop para controle de tarefas e tempo")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("ATC Informática")]
 [assembly: AssemblyProduct("ControleTarefasWinForms")]
-[assembly: AssemblyCopyright("Copyright © 2025")]
+[assembly: AssemblyCopyright("© 2025")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
