@@ -69,7 +69,7 @@ namespace ControleTarefasWinForms
 
             // Cria os botões e atualiza a interface
             CriarBotoesTarefas();
-            AtualizarDataGridView();
+           
 
             // Inicia o timer global
             timerGlobal.Start();
@@ -231,7 +231,6 @@ namespace ControleTarefasWinForms
                 buttonToRemove.Dispose();
             }
 
-            AtualizarDataGridView();
             _repository.SalvarTarefas(_tasks);
         }
 
@@ -413,36 +412,8 @@ namespace ControleTarefasWinForms
                 }
             }
 
-            // Atualiza o DataGridView
-            AtualizarDataGridView();
         }
 
-        /// <summary>
-        /// Atualiza o DataGridView com os dados das tarefas
-        /// </summary>
-        private void AtualizarDataGridView()
-        {
-            dgvTasks.Rows.Clear();
-
-            foreach (var task in _tasks)
-            {
-                string status = "";
-                switch (task.State)
-                {
-                    case TaskState.Pendente:
-                        status = "Pendente";
-                        break;
-                    case TaskState.Ativa:
-                        status = "Ativa";
-                        break;
-                    case TaskState.JaClicada:
-                        status = "Já clicada";
-                        break;
-                }
-
-                dgvTasks.Rows.Add(task.Name, task.FormattedTime, status);
-            }
-        }
 
         /// <summary>
         /// Timer global que atualiza o tempo da tarefa ativa a cada segundo
@@ -497,9 +468,6 @@ namespace ControleTarefasWinForms
                     var button = CriarBotaoTarefa(newTask);
                     flpTasks.Controls.Add(button);
 
-                    // Atualiza DataGridView
-                    AtualizarDataGridView();
-
                     // Salva no INI
                     _repository.SalvarTarefas(_tasks);
                 }
@@ -535,9 +503,6 @@ namespace ControleTarefasWinForms
 
             // Limpa a tarefa ativa
             _activeTask = null;
-
-            // Atualiza DataGridView
-            AtualizarDataGridView();
 
             // Salva no INI
             _repository.SalvarTarefas(_tasks);
