@@ -55,10 +55,16 @@ namespace ControleTarefasWinForms
 
             foreach (var task in _tasks)
             {
+                Console.WriteLine(
+                        $"[MainForm_Load - ANTES] Id={task.Id} | Nome={task.Name} | State={task.State}"
+                    );
                 task.LastStartTime = null;
 
                 if (task.State == TaskState.Ativa)
                     task.State = TaskState.Pausada;
+                Console.WriteLine(
+                        $"[MainForm_Load - DEPOIS] Id={task.Id} | Nome={task.Name} | State={task.State}"
+                    );
             }
 
             // Cria os botões e atualiza a interface
@@ -74,7 +80,7 @@ namespace ControleTarefasWinForms
         /// </summary>
         private void CriarBotoesTarefas()
         {
-            flpTasks.Controls.Clear();F
+            flpTasks.Controls.Clear();
 
             foreach (var task in _tasks)
             {
@@ -165,31 +171,26 @@ namespace ControleTarefasWinForms
 
             if (result == DialogResult.Yes)
             {
-                // Alternar desabilitado
-                if (task.State == TaskState.Desabilitada)
+                // Se estiver ativa, finalize corretamente
+                if (_activeTask != null && _activeTask.Id == task.Id)
                 {
-                    task.State = TaskState.Pendente;
-                }
-                else
-                {
-                    // Se estava ativa, encerra
-                    if (_activeTask != null && _activeTask.Id == task.Id)
+                    if (_activeTask.LastStartTime.HasValue)
                     {
-                        if (_activeTask.LastStartTime.HasValue)
-                        {
-                            var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
-                            _activeTask.TotalTime = _activeTask.TotalTime.Add(elapsed);
-                        }
-
-                        _activeTask.LastStartTime = null;
-                        _activeTask = null;
+                        var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
+                        _activeTask.TotalTime = _activeTask.TotalTime.Add(elapsed);
                     }
 
-                    task.State = TaskState.Desabilitada;
+                    _activeTask.LastStartTime = null;
+                    _activeTask = null;
                 }
+
+                // DESABILITA EXPLICITAMENTE
+                task.State = TaskState.Desabilitada;
 
                 AtualizarInterfaceTarefas();
                 _repository.SalvarTarefas(_tasks);
+
+                return; // <<< CRÍTICO: impede qualquer outra lógica
             }
             else if (result == DialogResult.No)
             {

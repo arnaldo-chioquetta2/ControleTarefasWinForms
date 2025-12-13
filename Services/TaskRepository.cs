@@ -52,7 +52,7 @@ namespace ControleTarefasWinForms.Services
                         State = ParseState(_iniFile.Read(section, "State", "Pendente")),
                         LastStartTime = null // Não continua contando de sessão anterior
                     };
-
+                    Console.WriteLine( $"[CarregarTarefas] Id={task.Id} | Nome={task.Name} | State={task.State}");
                     tasks.Add(task);
                 }
             }
@@ -104,17 +104,24 @@ namespace ControleTarefasWinForms.Services
         /// <summary>
         /// Converte string do INI para enum TaskState
         /// </summary>
-        private TaskState ParseState(string stateStr)
+        private TaskState ParseState(string value)
         {
-            switch (stateStr)
+            Console.WriteLine($"[ParseState] Valor lido do INI: '{value}'");
+
+            if (string.IsNullOrWhiteSpace(value))
             {
-                case "Ativa":
-                    return TaskState.Ativa;
-                case "JaClicada":
-                    return TaskState.JaClicada;
-                default:
-                    return TaskState.Pendente;
+                Console.WriteLine("[ParseState] Valor vazio → Pendente");
+                return TaskState.Pendente;
             }
+
+            if (Enum.TryParse<TaskState>(value, ignoreCase: true, out var state))
+            {
+                Console.WriteLine($"[ParseState] Convertido com sucesso: {state}");
+                return state;
+            }
+
+            Console.WriteLine("[ParseState] Falha no parse → Pendente");
+            return TaskState.Pendente;
         }
     }
 }
