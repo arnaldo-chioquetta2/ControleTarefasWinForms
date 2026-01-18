@@ -15,8 +15,6 @@ namespace ControleTarefasWinForms
     {
         // Lista de tarefas em memória
         private List<TaskModel> _tasks;
-        //private bool _isDragging = false;
-        //private Button _dragButton = null;
         private Button _dragButton;
         private Point _dragStartPoint;
         private bool _dragArmed;
@@ -29,6 +27,9 @@ namespace ControleTarefasWinForms
 
         // Próximo ID disponível para nova tarefa
         private int _nextId = 1;
+
+        // Flag para controlar se houve clique recente em tarefa
+        private bool _tarefaClicadaRecentemente = false;
 
         public MainForm()
         {
@@ -44,6 +45,11 @@ namespace ControleTarefasWinForms
             flpTasks.AllowDrop = true;
             flpTasks.DragOver += FlpTasks_DragOver;
             flpTasks.DragDrop += FlpTasks_DragDrop;
+
+            // Adiciona evento MouseLeave ao formulário e controles
+            this.MouseLeave += MainForm_MouseLeave;
+            flpTasks.MouseLeave += MainForm_MouseLeave;
+            btnAddTask.MouseLeave += MainForm_MouseLeave;
 
             _tasks = _repository.CarregarTarefas();
 
@@ -69,10 +75,68 @@ namespace ControleTarefasWinForms
 
             // Cria os botões e atualiza a interface
             CriarBotoesTarefas();
-           
+
+            // Define o título com versão
+            this.Text = "Controle de Tarefas - v1.0";
 
             // Inicia o timer global
             timerGlobal.Start();
+        }
+        //private void MainForm_Load(object sender, EventArgs e)
+        //{
+        //    flpTasks.AllowDrop = true;
+        //    flpTasks.DragOver += FlpTasks_DragOver;
+        //    flpTasks.DragDrop += FlpTasks_DragDrop;
+
+        //    // Adiciona evento MouseLeave ao formulário e controles
+        //    this.MouseLeave += MainForm_MouseLeave;
+        //    flpTasks.MouseLeave += MainForm_MouseLeave;
+        //    btnAddTask.MouseLeave += MainForm_MouseLeave;
+
+        //    _tasks = _repository.CarregarTarefas();
+
+        //    // Define o próximo ID
+        //    if (_tasks.Count > 0)
+        //    {
+        //        _nextId = _tasks.Max(t => t.Id) + 1;
+        //    }
+
+        //    foreach (var task in _tasks)
+        //    {
+        //        Console.WriteLine(
+        //                $"[MainForm_Load - ANTES] Id={task.Id} | Nome={task.Name} | State={task.State}"
+        //            );
+        //        task.LastStartTime = null;
+
+        //        if (task.State == TaskState.Ativa)
+        //            task.State = TaskState.Pausada;
+        //        Console.WriteLine(
+        //                $"[MainForm_Load - DEPOIS] Id={task.Id} | Nome={task.Name} | State={task.State}"
+        //            );
+        //    }
+
+        //    // Cria os botões e atualiza a interface
+        //    CriarBotoesTarefas();
+
+        //    // Inicia o timer global
+        //    timerGlobal.Start();
+        //}
+
+        /// <summary>
+        /// Evento disparado quando o mouse sai da janela
+        /// </summary>
+        private void MainForm_MouseLeave(object sender, EventArgs e)
+        {
+            // Verifica se o mouse realmente saiu da área do formulário
+            if (!this.ClientRectangle.Contains(this.PointToClient(Cursor.Position)))
+            {
+                // Só minimiza se alguma tarefa foi clicada recentemente
+                if (_tarefaClicadaRecentemente)
+                {
+                    timerMinimize.Stop();
+                    timerMinimize.Start();
+                }
+            }
         }
 
         /// <summary>
@@ -120,7 +184,6 @@ namespace ControleTarefasWinForms
             }
         }
 
-
         /// <summary>
         /// Cria um botão individual para uma tarefa
         /// </summary>
@@ -129,7 +192,7 @@ namespace ControleTarefasWinForms
             var button = new Button
             {
                 Tag = task,
-                Width = flpTasks.Width - 25, // Largura do painel menos margem para scroll
+                Width = flpTasks.Width - 25,
                 Height = 60,
                 Font = new Font("Segoe UI", 11, FontStyle.Regular),
                 FlatStyle = FlatStyle.Flat,
@@ -137,12 +200,10 @@ namespace ControleTarefasWinForms
                 Padding = new Padding(10, 0, 0, 0)
             };
 
-            // Define cor e texto do botão conforme estado
             AtualizarBotao(button, task);
-
-            // Evento de clique
             button.Click += BotaoTarefa_Click;
             button.MouseUp += BotaoTarefa_MouseUp;
+            button.MouseLeave += MainForm_MouseLeave; // Adiciona evento ao botão
 
             return button;
         }
@@ -171,7 +232,6 @@ namespace ControleTarefasWinForms
 
             if (result == DialogResult.Yes)
             {
-                // Se estiver ativa, finalize corretamente
                 if (_activeTask != null && _activeTask.Id == task.Id)
                 {
                     if (_activeTask.LastStartTime.HasValue)
@@ -184,13 +244,10 @@ namespace ControleTarefasWinForms
                     _activeTask = null;
                 }
 
-                // DESABILITA EXPLICITAMENTE
                 task.State = TaskState.Desabilitada;
-
                 AtualizarInterfaceTarefas();
                 _repository.SalvarTarefas(_tasks);
-
-                return; // <<< CRÍTICO: impede qualquer outra lógica
+                return;
             }
             else if (result == DialogResult.No)
             {
@@ -198,12 +255,10 @@ namespace ControleTarefasWinForms
             }
         }
 
-
         private void ApagarTarefa(TaskModel task)
         {
             if (task == null) return;
 
-            // Se a tarefa excluída era a ativa, limpa referência
             if (_activeTask != null && _activeTask.Id == task.Id)
             {
                 _activeTask = null;
@@ -211,7 +266,6 @@ namespace ControleTarefasWinForms
 
             _tasks.Remove(task);
 
-            // Remover botão correspondente
             Button buttonToRemove = null;
 
             foreach (Control control in flpTasks.Controls)
@@ -233,8 +287,6 @@ namespace ControleTarefasWinForms
 
             _repository.SalvarTarefas(_tasks);
         }
-
-
 
         /// <summary>
         /// Atualiza a aparência de um botão conforme o estado da tarefa
@@ -259,10 +311,10 @@ namespace ControleTarefasWinForms
                     break;
 
                 case TaskState.Pausada:
-                    // cor de pausa – escolha a que achar melhor
-                    button.BackColor = Color.Khaki;      // ou LightYellow, Orange, etc.
+                    button.BackColor = Color.Khaki;
                     button.ForeColor = Color.Black;
                     break;
+
                 case TaskState.Desabilitada:
                     button.BackColor = Color.White;
                     button.ForeColor = Color.Black;
@@ -280,10 +332,10 @@ namespace ControleTarefasWinForms
             if (clickedTask == null)
                 return;
 
-            //
-            // REGRA 1
-            // Clicar novamente na tarefa ATIVA → pausa
-            //
+            // Marca que uma tarefa foi clicada
+            _tarefaClicadaRecentemente = true;
+
+            // REGRA 1: Clicar novamente na tarefa ATIVA → pausa
             if (_activeTask != null && _activeTask.Id == clickedTask.Id)
             {
                 if (_activeTask.LastStartTime.HasValue)
@@ -301,10 +353,7 @@ namespace ControleTarefasWinForms
                 return;
             }
 
-            //
-            // REGRA 2
-            // Clicar em uma tarefa PAUSADA → volta a ser ATIVA
-            //
+            // REGRA 2: Clicar em uma tarefa PAUSADA → volta a ser ATIVA
             if (clickedTask.State == TaskState.Pausada)
             {
                 if (_activeTask != null && _activeTask.LastStartTime.HasValue)
@@ -321,16 +370,10 @@ namespace ControleTarefasWinForms
 
                 AtualizarInterfaceTarefas();
                 _repository.SalvarTarefas(_tasks);
-
-                timerMinimize.Stop();
-                timerMinimize.Start();
                 return;
             }
 
-            //
-            // LÓGICA NORMAL
-            // Clique em OUTRA tarefa
-            //
+            // LÓGICA NORMAL: Clique em OUTRA tarefa
 
             // 1. Finaliza contagem da tarefa ativa (se houver)
             if (_activeTask != null && _activeTask.LastStartTime.HasValue)
@@ -340,8 +383,7 @@ namespace ControleTarefasWinForms
                 _activeTask.LastStartTime = null;
             }
 
-            // 2. Se existir alguma tarefa PAUSADA (diferente da clicada),
-            // ela vira "JáClicada"
+            // 2. Se existir alguma tarefa PAUSADA (diferente da clicada), ela vira "JáClicada"
             var tarefaPausada = _tasks
                 .FirstOrDefault(t => t.State == TaskState.Pausada && t.Id != clickedTask.Id);
 
@@ -392,18 +434,13 @@ namespace ControleTarefasWinForms
             // 6. Atualiza UI e salva
             AtualizarInterfaceTarefas();
             _repository.SalvarTarefas(_tasks);
-
-            // 7. Minimiza após 2 segundos
-            timerMinimize.Stop();
-            timerMinimize.Start();
         }
 
         /// <summary>
-        /// Atualiza todos os botões e o DataGridView
+        /// Atualiza todos os botões
         /// </summary>
         private void AtualizarInterfaceTarefas()
         {
-            // Atualiza os botões
             foreach (Control control in flpTasks.Controls)
             {
                 if (control is Button button && button.Tag is TaskModel task)
@@ -411,9 +448,7 @@ namespace ControleTarefasWinForms
                     AtualizarBotao(button, task);
                 }
             }
-
         }
-
 
         /// <summary>
         /// Timer global que atualiza o tempo da tarefa ativa a cada segundo
@@ -422,24 +457,22 @@ namespace ControleTarefasWinForms
         {
             if (_activeTask != null && _activeTask.LastStartTime.HasValue)
             {
-                // Incrementa 1 segundo no tempo total
                 _activeTask.TotalTime = _activeTask.TotalTime.Add(TimeSpan.FromSeconds(1));
-
-                // Atualiza LastStartTime para o momento atual
                 _activeTask.LastStartTime = DateTime.Now;
-
-                // Atualiza a interface
                 AtualizarInterfaceTarefas();
             }
         }
 
         /// <summary>
-        /// Timer de minimização (dispara 2 segundos após clique)
+        /// Timer de minimização (dispara após o mouse sair da janela)
         /// </summary>
         private void timerMinimize_Tick(object sender, EventArgs e)
         {
             timerMinimize.Stop();
             this.WindowState = FormWindowState.Minimized;
+
+            // Reseta a flag após minimizar
+            _tarefaClicadaRecentemente = false;
         }
 
         /// <summary>
@@ -451,7 +484,6 @@ namespace ControleTarefasWinForms
             {
                 if (form.ShowDialog() == DialogResult.OK)
                 {
-                    // Cria nova tarefa
                     var newTask = new TaskModel
                     {
                         Id = _nextId++,
@@ -461,51 +493,14 @@ namespace ControleTarefasWinForms
                         LastStartTime = null
                     };
 
-                    // Adiciona à lista
                     _tasks.Add(newTask);
 
-                    // Cria o botão
                     var button = CriarBotaoTarefa(newTask);
                     flpTasks.Controls.Add(button);
 
-                    // Salva no INI
                     _repository.SalvarTarefas(_tasks);
                 }
             }
-        }
-
-        /// <summary>
-        /// Apaga a tarefa atualmente ativa
-        /// </summary>
-        private void ApagarTarefaAtiva()
-        {
-            if (_activeTask == null) return;
-
-            // Remove da lista
-            _tasks.Remove(_activeTask);
-
-            // Remove o botão correspondente
-            Button buttonToRemove = null;
-            foreach (Control control in flpTasks.Controls)
-            {
-                if (control is Button button && button.Tag is TaskModel task && task.Id == _activeTask.Id)
-                {
-                    buttonToRemove = button;
-                    break;
-                }
-            }
-
-            if (buttonToRemove != null)
-            {
-                flpTasks.Controls.Remove(buttonToRemove);
-                buttonToRemove.Dispose();
-            }
-
-            // Limpa a tarefa ativa
-            _activeTask = null;
-
-            // Salva no INI
-            _repository.SalvarTarefas(_tasks);
         }
 
         /// <summary>
@@ -513,7 +508,6 @@ namespace ControleTarefasWinForms
         /// </summary>
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            // Atualiza tempo da tarefa ativa antes de fechar
             if (_activeTask != null && _activeTask.LastStartTime.HasValue)
             {
                 var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
@@ -521,7 +515,6 @@ namespace ControleTarefasWinForms
                 _activeTask.LastStartTime = null;
             }
 
-            // Salva todas as tarefas
             _repository.SalvarTarefas(_tasks);
         }
 
@@ -549,10 +542,7 @@ namespace ControleTarefasWinForms
         {
             var draggedButton = (Button)e.Data.GetData(typeof(Button));
 
-            // Converte coordenada do mouse para posição dentro do painel
             Point point = flpTasks.PointToClient(new Point(e.X, e.Y));
-
-            // Descobrir qual controle está na posição de drop
             Control target = flpTasks.GetChildAtPoint(point);
 
             if (target == null || target == draggedButton)
@@ -564,22 +554,14 @@ namespace ControleTarefasWinForms
             if (oldIndex == newIndex)
                 return;
 
-            // Remove e insere na nova posição
             flpTasks.Controls.SetChildIndex(draggedButton, newIndex);
             flpTasks.Invalidate();
 
-            //
-            // >>> Atualiza ordem na lista interna _tasks <<<
-            //
             var draggedTask = draggedButton.Tag as TaskModel;
-
             _tasks.Remove(draggedTask);
             _tasks.Insert(newIndex, draggedTask);
 
-            // Salvar nova ordem no INI
             _repository.SalvarTarefas(_tasks);
         }
-
-
     }
 }
