@@ -33,18 +33,29 @@ namespace ControleTarefasWinForms.Models
         /// </summary>
         public DateTime? LastStartTime { get; set; }
 
-        /// <summary>
-        /// Retorna uma string formatada do tempo total (HH:MM:SS)
-        /// </summary>
         public string FormattedTime
         {
             get
             {
-                return string.Format("{0:D2}:{1:D2}:{2:D2}",
-                    (int)TotalTime.TotalHours,
-                    TotalTime.Minutes,
-                    TotalTime.Seconds);
+                int days = (int)TotalTime.TotalDays;
+
+                if (days > 0)
+                {
+                    return string.Format("{0}d {1:D2}:{2:D2}:{3:D2}",
+                        days,
+                        TotalTime.Hours,
+                        TotalTime.Minutes,
+                        TotalTime.Seconds);
+                }
+                else
+                {
+                    return string.Format("{0:D2}:{1:D2}:{2:D2}",
+                        TotalTime.Hours,
+                        TotalTime.Minutes,
+                        TotalTime.Seconds);
+                }
             }
         }
+
     }
 }
