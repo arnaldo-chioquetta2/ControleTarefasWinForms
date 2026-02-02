@@ -259,33 +259,71 @@ namespace ControleTarefasWinForms
             switch (task.State)
             {
                 case TaskState.Pendente:
-                    button.BackColor = Color.LightGray;
-                    button.ForeColor = Color.Black;
+                    // "Tarefa a ser feita" -> laranja forte (chama atenção)
+                    button.BackColor = Color.OrangeRed;          // forte
+                    button.ForeColor = Color.White;
                     break;
 
                 case TaskState.Ativa:
+                    // Mantém como estava
                     button.BackColor = Color.LightGreen;
                     button.ForeColor = Color.Black;
                     break;
 
                 case TaskState.JaClicada:
-                    button.BackColor = Color.LightBlue;
+                    // "Já feita nessa rodada" -> laranja mais suave
+                    button.BackColor = Color.PeachPuff;          // laranja claro
                     button.ForeColor = Color.Black;
                     break;
 
                 case TaskState.Pausada:
-                    button.BackColor = Color.Khaki;
+                    // Pausada -> amarelo com leve ajuste de tom
+                    button.BackColor = Color.Goldenrod;          // amarelo mais “quente”/escuro que Khaki
                     button.ForeColor = Color.Black;
                     break;
 
                 case TaskState.Desabilitada:
-                    button.BackColor = Color.White;
-                    button.ForeColor = Color.Black;
+                    // Desabilitada -> cinza (menos chamativa)
+                    button.BackColor = Color.Gainsboro;
+                    button.ForeColor = Color.DimGray;
                     break;
             }
 
             button.Text = $"{task.Name} - {task.FormattedTime}";
         }
+
+        //private void AtualizarBotao(Button button, TaskModel task)
+        //{
+        //    switch (task.State)
+        //    {
+        //        case TaskState.Pendente:
+        //            button.BackColor = Color.LightGray;
+        //            button.ForeColor = Color.Black;
+        //            break;
+
+        //        case TaskState.Ativa:
+        //            button.BackColor = Color.LightGreen;
+        //            button.ForeColor = Color.Black;
+        //            break;
+
+        //        case TaskState.JaClicada:
+        //            button.BackColor = Color.LightBlue;
+        //            button.ForeColor = Color.Black;
+        //            break;
+
+        //        case TaskState.Pausada:
+        //            button.BackColor = Color.Khaki;
+        //            button.ForeColor = Color.Black;
+        //            break;
+
+        //        case TaskState.Desabilitada:
+        //            button.BackColor = Color.White;
+        //            button.ForeColor = Color.Black;
+        //            break;
+        //    }
+
+        //    button.Text = $"{task.Name} - {task.FormattedTime}";
+        //}
 
         private void BotaoTarefa_Click(object sender, EventArgs e)
         {
