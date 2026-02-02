@@ -42,7 +42,7 @@ namespace ControleTarefasWinForms
             this.flpTasks.FlowDirection = System.Windows.Forms.FlowDirection.TopDown;
             this.flpTasks.Location = new System.Drawing.Point(0, 0);
             this.flpTasks.Name = "flpTasks";
-            this.flpTasks.Size = new System.Drawing.Size(800, 600);
+            this.flpTasks.Size = new System.Drawing.Size(800, 560);
             this.flpTasks.TabIndex = 0;
             this.flpTasks.WrapContents = false;
             // 
@@ -73,14 +73,15 @@ namespace ControleTarefasWinForms
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 600);
-            this.Controls.Add(this.btnAddTask);
             this.Controls.Add(this.flpTasks);
+            this.Controls.Add(this.btnAddTask);
             this.KeyPreview = true;
             this.Name = "MainForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Controle de Tarefas";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.MainForm_FormClosing);
             this.Load += new System.EventHandler(this.MainForm_Load);
+            this.Shown += new System.EventHandler(this.MainForm_Shown);
             this.Resize += new System.EventHandler(this.MainForm_Resize);
             this.ResumeLayout(false);
 

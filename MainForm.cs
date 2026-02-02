@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -82,45 +83,7 @@ namespace ControleTarefasWinForms
             // Inicia o timer global
             timerGlobal.Start();
         }
-        //private void MainForm_Load(object sender, EventArgs e)
-        //{
-        //    flpTasks.AllowDrop = true;
-        //    flpTasks.DragOver += FlpTasks_DragOver;
-        //    flpTasks.DragDrop += FlpTasks_DragDrop;
-
-        //    // Adiciona evento MouseLeave ao formulário e controles
-        //    this.MouseLeave += MainForm_MouseLeave;
-        //    flpTasks.MouseLeave += MainForm_MouseLeave;
-        //    btnAddTask.MouseLeave += MainForm_MouseLeave;
-
-        //    _tasks = _repository.CarregarTarefas();
-
-        //    // Define o próximo ID
-        //    if (_tasks.Count > 0)
-        //    {
-        //        _nextId = _tasks.Max(t => t.Id) + 1;
-        //    }
-
-        //    foreach (var task in _tasks)
-        //    {
-        //        Console.WriteLine(
-        //                $"[MainForm_Load - ANTES] Id={task.Id} | Nome={task.Name} | State={task.State}"
-        //            );
-        //        task.LastStartTime = null;
-
-        //        if (task.State == TaskState.Ativa)
-        //            task.State = TaskState.Pausada;
-        //        Console.WriteLine(
-        //                $"[MainForm_Load - DEPOIS] Id={task.Id} | Nome={task.Name} | State={task.State}"
-        //            );
-        //    }
-
-        //    // Cria os botões e atualiza a interface
-        //    CriarBotoesTarefas();
-
-        //    // Inicia o timer global
-        //    timerGlobal.Start();
-        //}
+        
 
         /// <summary>
         /// Evento disparado quando o mouse sai da janela
@@ -499,14 +462,65 @@ namespace ControleTarefasWinForms
                     flpTasks.Controls.Add(button);
 
                     _repository.SalvarTarefas(_tasks);
+
+                    AjustarAlturaJanelaSeNecessario();
                 }
             }
         }
 
-        /// <summary>
-        /// Evento de fechamento do formulário (salva antes de fechar)
-        /// </summary>
-        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+
+    private void AjustarAlturaJanelaSeNecessario()
+    {
+        Debug.WriteLine("==== AjustarAlturaJanelaSeNecessario (REAL) ====");
+
+        if (flpTasks.Controls.Count == 0)
+        {
+            Debug.WriteLine("Nenhuma tarefa no painel.");
+            return;
+        }
+
+        flpTasks.PerformLayout();
+
+        Control ultimo = flpTasks.Controls[flpTasks.Controls.Count - 1];
+
+        int bottomUltimoControle = ultimo.Bottom + flpTasks.Padding.Bottom;
+        int alturaVisivel = flpTasks.ClientSize.Height;
+
+        Debug.WriteLine($"Bottom do último controle: {ultimo.Bottom}");
+        Debug.WriteLine($"Altura visível do flpTasks: {alturaVisivel}");
+
+        if (bottomUltimoControle <= alturaVisivel)
+        {
+            Debug.WriteLine("❌ Último controle ainda está visível. Não vai redimensionar.");
+            return;
+        }
+
+        int diferenca = bottomUltimoControle - alturaVisivel;
+        Debug.WriteLine($"Diferença necessária: {diferenca}");
+
+        Rectangle areaTrabalho = Screen.FromControl(this).WorkingArea;
+
+        int alturaMaximaForm = areaTrabalho.Height;
+        int alturaAtual = this.Height;
+        int novaAltura = alturaAtual + diferenca;
+
+        Debug.WriteLine($"Altura atual do Form: {alturaAtual}");
+        Debug.WriteLine($"Altura desejada do Form: {novaAltura}");
+        Debug.WriteLine($"Altura máxima permitida: {alturaMaximaForm}");
+
+        int alturaFinal = Math.Min(novaAltura, alturaMaximaForm);
+
+        this.Height = alturaFinal;
+
+        Debug.WriteLine($"Altura final aplicada: {alturaFinal}");
+        Debug.WriteLine("=============================================");
+    }
+
+
+    /// <summary>
+    /// Evento de fechamento do formulário (salva antes de fechar)
+    /// </summary>
+    private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (_activeTask != null && _activeTask.LastStartTime.HasValue)
             {
@@ -563,5 +577,22 @@ namespace ControleTarefasWinForms
 
             _repository.SalvarTarefas(_tasks);
         }
+
+        private void MainForm_Shown(object sender, EventArgs e)
+        {
+            BeginInvoke((Action)(() =>
+            {
+                AjustarAlturaInicial();
+            }));
+        }
+
+        private void AjustarAlturaInicial()
+        {
+            if (flpTasks.Controls.Count == 0)
+                return;
+
+            AjustarAlturaJanelaSeNecessario();
+        }
+
     }
 }
