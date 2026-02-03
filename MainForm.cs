@@ -32,6 +32,8 @@ namespace ControleTarefasWinForms
         // Flag para controlar se houve clique recente em tarefa
         private bool _tarefaClicadaRecentemente = false;
 
+        #region Inicialização
+
         public MainForm()
         {
             InitializeComponent();
@@ -74,20 +76,72 @@ namespace ControleTarefasWinForms
                     );
             }
 
+            ReordenarTarefasDesabilitadasParaBaixo();
+
             // Cria os botões e atualiza a interface
             CriarBotoesTarefas();
 
             // Define o título com versão
-            this.Text = "Controle de Tarefas - v1.0";
+            this.Text = "Controle de Tarefas";
 
             // Inicia o timer global
             timerGlobal.Start();
         }
-        
 
-        /// <summary>
-        /// Evento disparado quando o mouse sai da janela
-        /// </summary>
+        private void MainForm_Shown(object sender, EventArgs e)
+        {
+            BeginInvoke((Action)(() =>
+            {
+                AjustarAlturaInicial();
+            }));
+        }
+
+        private void AjustarAlturaInicial()
+        {
+            if (flpTasks.Controls.Count == 0)
+                return;
+
+            AjustarAlturaJanelaSeNecessario();
+        }
+
+        private void CriarBotoesTarefas()
+        {
+            flpTasks.Controls.Clear();
+
+            foreach (var task in _tasks)
+            {
+                var button = CriarBotaoTarefa(task);
+                button.MouseDown += BotaoTarefa_MouseDown;
+                button.MouseMove += BotaoTarefa_MouseMove;
+                flpTasks.Controls.Add(button);
+            }
+        }
+
+        private Button CriarBotaoTarefa(TaskModel task)
+        {
+            var button = new Button
+            {
+                Tag = task,
+                Width = flpTasks.Width - 25,
+                Height = 60,
+                Font = new Font("Segoe UI", 11, FontStyle.Regular),
+                FlatStyle = FlatStyle.Flat,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(10, 0, 0, 0)
+            };
+
+            AtualizarBotao(button, task);
+            button.Click += BotaoTarefa_Click;
+            button.MouseUp += BotaoTarefa_MouseUp;
+            button.MouseLeave += MainForm_MouseLeave; // Adiciona evento ao botão
+
+            return button;
+        }
+
+        #endregion
+
+        #region Evento de Mouse
+
         private void MainForm_MouseLeave(object sender, EventArgs e)
         {
             // Verifica se o mouse realmente saiu da área do formulário
@@ -99,22 +153,6 @@ namespace ControleTarefasWinForms
                     timerMinimize.Stop();
                     timerMinimize.Start();
                 }
-            }
-        }
-
-        /// <summary>
-        /// Cria os botões de tarefa no FlowLayoutPanel
-        /// </summary>
-        private void CriarBotoesTarefas()
-        {
-            flpTasks.Controls.Clear();
-
-            foreach (var task in _tasks)
-            {
-                var button = CriarBotaoTarefa(task);
-                button.MouseDown += BotaoTarefa_MouseDown;
-                button.MouseMove += BotaoTarefa_MouseMove;
-                flpTasks.Controls.Add(button);
             }
         }
 
@@ -147,29 +185,7 @@ namespace ControleTarefasWinForms
             }
         }
 
-        /// <summary>
-        /// Cria um botão individual para uma tarefa
-        /// </summary>
-        private Button CriarBotaoTarefa(TaskModel task)
-        {
-            var button = new Button
-            {
-                Tag = task,
-                Width = flpTasks.Width - 25,
-                Height = 60,
-                Font = new Font("Segoe UI", 11, FontStyle.Regular),
-                FlatStyle = FlatStyle.Flat,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(10, 0, 0, 0)
-            };
-
-            AtualizarBotao(button, task);
-            button.Click += BotaoTarefa_Click;
-            button.MouseUp += BotaoTarefa_MouseUp;
-            button.MouseLeave += MainForm_MouseLeave; // Adiciona evento ao botão
-
-            return button;
-        }
+        #endregion
 
         private void BotaoTarefa_MouseUp(object sender, MouseEventArgs e)
         {
@@ -206,15 +222,74 @@ namespace ControleTarefasWinForms
                     _activeTask.LastStartTime = null;
                     _activeTask = null;
                 }
-
                 task.State = TaskState.Desabilitada;
-                AtualizarInterfaceTarefas();
+
+                // garante que desabilitadas vão para baixo
+                ReordenarTarefasDesabilitadasParaBaixo();
+
+                // recria UI na nova ordem
+                RecriarListaVisual();
+
                 _repository.SalvarTarefas(_tasks);
                 return;
             }
             else if (result == DialogResult.No)
             {
                 ApagarTarefa(task);
+            }
+        }
+
+        private void ReordenarTarefasDesabilitadasParaBaixo()
+        {
+            var ativas = _tasks
+                .Where(t => t.State != TaskState.Desabilitada)
+                .ToList();
+
+            var desabilitadas = _tasks
+                .Where(t => t.State == TaskState.Desabilitada)
+                .ToList();
+
+            _tasks.Clear();
+            _tasks.AddRange(ativas);
+            _tasks.AddRange(desabilitadas);
+        }
+
+
+        private void RecriarListaVisual()
+        {
+            flpTasks.SuspendLayout();
+            flpTasks.Controls.Clear();
+
+            foreach (var task in _tasks)
+            {
+                var button = CriarBotaoTarefa(task);
+                flpTasks.Controls.Add(button);
+            }
+
+            flpTasks.ResumeLayout();
+        }
+
+        private void MoverTarefaParaBlocoDesabilitadas(TaskModel task)
+        {
+            if (task == null)
+                return;
+
+            // Remove da posição atual
+            _tasks.Remove(task);
+
+            // Procura a primeira desabilitada existente
+            int indexPrimeiraDesabilitada =
+                _tasks.FindIndex(t => t.State == TaskState.Desabilitada);
+
+            if (indexPrimeiraDesabilitada == -1)
+            {
+                // Nenhuma desabilitada ainda → vai para o final
+                _tasks.Add(task);
+            }
+            else
+            {
+                // Entra como a PRIMEIRA das desabilitadas
+                _tasks.Insert(indexPrimeiraDesabilitada, task);
             }
         }
 
@@ -306,39 +381,7 @@ namespace ControleTarefasWinForms
 
             button.Text = $"{task.Name} - {task.FormattedTime}";
         }
-
-        //private void AtualizarBotao(Button button, TaskModel task)
-        //{
-        //    switch (task.State)
-        //    {
-        //        case TaskState.Pendente:
-        //            button.BackColor = Color.LightGray;
-        //            button.ForeColor = Color.Black;
-        //            break;
-
-        //        case TaskState.Ativa:
-        //            button.BackColor = Color.LightGreen;
-        //            button.ForeColor = Color.Black;
-        //            break;
-
-        //        case TaskState.JaClicada:
-        //            button.BackColor = Color.LightBlue;
-        //            button.ForeColor = Color.Black;
-        //            break;
-
-        //        case TaskState.Pausada:
-        //            button.BackColor = Color.Khaki;
-        //            button.ForeColor = Color.Black;
-        //            break;
-
-        //        case TaskState.Desabilitada:
-        //            button.BackColor = Color.White;
-        //            button.ForeColor = Color.Black;
-        //            break;
-        //    }
-
-        //    button.Text = $"{task.Name} - {task.FormattedTime}";
-        //}
+        
 
         private void BotaoTarefa_Click(object sender, EventArgs e)
         {
@@ -522,7 +565,7 @@ namespace ControleTarefasWinForms
         }
 
 
-    private void AjustarAlturaJanelaSeNecessario()
+        private void AjustarAlturaJanelaSeNecessario()
     {
         Debug.WriteLine("==== AjustarAlturaJanelaSeNecessario (REAL) ====");
 
@@ -573,7 +616,7 @@ namespace ControleTarefasWinForms
     /// <summary>
     /// Evento de fechamento do formulário (salva antes de fechar)
     /// </summary>
-    private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (_activeTask != null && _activeTask.LastStartTime.HasValue)
             {
@@ -631,21 +674,6 @@ namespace ControleTarefasWinForms
             _repository.SalvarTarefas(_tasks);
         }
 
-        private void MainForm_Shown(object sender, EventArgs e)
-        {
-            BeginInvoke((Action)(() =>
-            {
-                AjustarAlturaInicial();
-            }));
-        }
-
-        private void AjustarAlturaInicial()
-        {
-            if (flpTasks.Controls.Count == 0)
-                return;
-
-            AjustarAlturaJanelaSeNecessario();
-        }
 
     }
 }
