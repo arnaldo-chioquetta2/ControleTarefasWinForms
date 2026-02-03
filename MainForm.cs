@@ -32,6 +32,8 @@ namespace ControleTarefasWinForms
         // Flag para controlar se houve clique recente em tarefa
         private bool _tarefaClicadaRecentemente = false;
 
+        private bool _desabilitadosExpandidos = false;
+
         #region Inicialização
 
         public MainForm()
@@ -76,10 +78,10 @@ namespace ControleTarefasWinForms
                     );
             }
 
-            ReordenarTarefasDesabilitadasParaBaixo();
+            RecriarListaVisual();
 
             // Cria os botões e atualiza a interface
-            CriarBotoesTarefas();
+            // CriarBotoesTarefas();
 
             // Define o título com versão
             this.Text = "Controle de Tarefas";
@@ -260,13 +262,78 @@ namespace ControleTarefasWinForms
             flpTasks.SuspendLayout();
             flpTasks.Controls.Clear();
 
-            foreach (var task in _tasks)
+            var tarefasAtivas = _tasks
+                .Where(t => t.State != TaskState.Desabilitada)
+                .ToList();
+
+            var tarefasDesabilitadas = _tasks
+                .Where(t => t.State == TaskState.Desabilitada)
+                .ToList();
+
+            // 1. Adiciona tarefas normais
+            foreach (var task in tarefasAtivas)
             {
                 var button = CriarBotaoTarefa(task);
                 flpTasks.Controls.Add(button);
             }
 
+            // 2. Se houver desabilitadas, adiciona o botão agrupador
+            if (tarefasDesabilitadas.Any())
+            {
+                var btnGrupo = CriarBotaoAgrupadorDesabilitados();
+                flpTasks.Controls.Add(btnGrupo);
+
+                // 3. Se estiver expandido, mostra as desabilitadas
+                if (_desabilitadosExpandidos)
+                {
+                    foreach (var task in tarefasDesabilitadas)
+                    {
+                        var button = CriarBotaoTarefa(task);
+                        flpTasks.Controls.Add(button);
+                    }
+                }
+            }
+
             flpTasks.ResumeLayout();
+        }
+
+        private Button CriarBotaoAgrupadorDesabilitados()
+        {
+            var btn = new Button
+            {
+                Height = 30, // metade dos botões normais (60)
+                Width = flpTasks.Width - 25,
+                Text = _desabilitadosExpandidos
+                    ? "Encolher Desabilitados"
+                    : "Desabilitados",
+                BackColor = Color.Gainsboro,
+                ForeColor = Color.DimGray,
+                FlatStyle = FlatStyle.Flat,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+
+            btn.FlatAppearance.BorderSize = 0;
+
+            btn.Click += (s, e) =>
+            {
+                bool expandindo = !_desabilitadosExpandidos;
+
+                _desabilitadosExpandidos = expandindo;
+                RecriarListaVisual();
+
+                // 🔥 Só ajusta altura ao EXPANDIR
+                if (expandindo)
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        AjustarAlturaJanelaSeNecessario();
+                    }));
+                }
+            };
+
+            return btn;
         }
 
         private void MoverTarefaParaBlocoDesabilitadas(TaskModel task)
