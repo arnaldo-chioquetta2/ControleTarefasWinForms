@@ -283,10 +283,25 @@ namespace ControleTarefasWinForms
                     break;
 
                 case TaskState.Desabilitada:
-                    // Desabilitada -> cinza (menos chamativa)
                     button.BackColor = Color.Gainsboro;
                     button.ForeColor = Color.DimGray;
+
+                    // ❌ Remove qualquer efeito de hover
+                    button.FlatStyle = FlatStyle.Flat;
+                    button.FlatAppearance.BorderSize = 0;
+                    button.FlatAppearance.MouseOverBackColor = button.BackColor;
+                    button.FlatAppearance.MouseDownBackColor = button.BackColor;
+
+                    // ❌ Cursor neutro
+                    button.Cursor = Cursors.Default;
+
                     break;
+
+                    //case TaskState.Desabilitada:
+                    //    // Desabilitada -> cinza (menos chamativa)
+                    //    button.BackColor = Color.Gainsboro;
+                    //    button.ForeColor = Color.DimGray;
+                    //    break;
             }
 
             button.Text = $"{task.Name} - {task.FormattedTime}";
