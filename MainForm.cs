@@ -34,6 +34,11 @@ namespace ControleTarefasWinForms
 
         private bool _desabilitadosExpandidos = false;
 
+        private Button _botaoSelecionado;
+        private TextBox _textBoxEdicao;
+        private string _nomeOriginal;
+        private bool _finalizandoEdicao;
+
         #region Inicialização
 
         public MainForm()
@@ -133,9 +138,19 @@ namespace ControleTarefasWinForms
             };
 
             AtualizarBotao(button, task);
-            button.Click += BotaoTarefa_Click;
+
+            // 🔹 Clique: seleciona o botão + executa lógica normal
+            button.Click += (s, e) =>
+            {
+                _botaoSelecionado = button;   // marca como selecionado
+                BotaoTarefa_Click(s, e);      // mantém comportamento existente
+            };
+
+            // 🔹 Botão direito (menu / desabilitar / excluir)
             button.MouseUp += BotaoTarefa_MouseUp;
-            button.MouseLeave += MainForm_MouseLeave; // Adiciona evento ao botão
+
+            // 🔹 Mouse saiu da área (minimização automática)
+            button.MouseLeave += MainForm_MouseLeave;
 
             return button;
         }
@@ -255,7 +270,6 @@ namespace ControleTarefasWinForms
             _tasks.AddRange(ativas);
             _tasks.AddRange(desabilitadas);
         }
-
 
         private void RecriarListaVisual()
         {
@@ -741,6 +755,163 @@ namespace ControleTarefasWinForms
             _repository.SalvarTarefas(_tasks);
         }
 
+        #region F2
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.F2 && _botaoSelecionado != null)
+            {
+                IniciarEdicaoTarefa(_botaoSelecionado);
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void IniciarEdicaoTarefa(Button button)
+        {
+            if (button == null || _textBoxEdicao != null)
+                return;
+
+            var task = button.Tag as TaskModel;
+            if (task == null)
+                return;
+
+            // (Opcional) bloquear renomear desabilitadas
+            if (task.State == TaskState.Desabilitada)
+                return;
+
+            _nomeOriginal = task.Name;
+
+            _textBoxEdicao = new TextBox
+            {
+                Text = task.Name,
+                Font = button.Font,
+                Bounds = button.Bounds,
+                Parent = flpTasks
+            };
+
+            _textBoxEdicao.KeyDown += TextBoxEdicao_KeyDown;
+            _textBoxEdicao.LostFocus += TextBoxEdicao_LostFocus;
+
+            _textBoxEdicao.SelectAll();
+            _textBoxEdicao.Focus();
+        }
+
+        private void TextBoxEdicao_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                FinalizarEdicaoTarefa(confirmar: true);
+            }
+            else if (e.KeyCode == Keys.Escape)
+            {
+                e.SuppressKeyPress = true;
+                FinalizarEdicaoTarefa(confirmar: false);
+            }
+        }
+
+        private void TextBoxEdicao_LostFocus(object sender, EventArgs e)
+        {
+            FinalizarEdicaoTarefa(confirmar: true);
+        }
+
+        private void FinalizarEdicaoTarefa(bool confirmar)
+        {
+            if (_finalizandoEdicao)
+                return;
+
+            if (_textBoxEdicao == null || _botaoSelecionado == null)
+                return;
+
+            _finalizandoEdicao = true;
+
+            try
+            {
+                // Captura local e zera o campo logo no início (evita null no meio)
+                var tb = _textBoxEdicao;
+                _textBoxEdicao = null;
+
+                // Desconecta eventos (evita reentrância por LostFocus/KeyDown)
+                tb.KeyDown -= TextBoxEdicao_KeyDown;
+                tb.LostFocus -= TextBoxEdicao_LostFocus;
+
+                var task = _botaoSelecionado.Tag as TaskModel;
+
+                string novoNome = tb.Text.Trim();
+
+                // Remove/Dispose do TextBox com segurança
+                if (tb.Parent != null)
+                    tb.Parent.Controls.Remove(tb);
+
+                tb.Dispose();
+
+                // Se cancelou, ou não tem task, ou nome inválido/igual, só restaura UI e sai
+                if (!confirmar || task == null || string.IsNullOrWhiteSpace(novoNome) || novoNome == _nomeOriginal)
+                {
+                    if (task != null)
+                        AtualizarBotao(_botaoSelecionado, task);
+                    return;
+                }
+
+                var result = MessageBox.Show(
+                    $"Deseja renomear a tarefa \"{_nomeOriginal}\" para \"{novoNome}\"?\n\n" +
+                    "Sim = Renomeia e zera o tempo\n" +
+                    "Não = Renomeia mantendo o tempo\n" +
+                    "Cancelar = Não renomeia",
+                    "Renomear tarefa",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Question
+                );
+
+                if (result == DialogResult.Cancel)
+                {
+                    AtualizarBotao(_botaoSelecionado, task);
+                    return;
+                }
+
+                // Renomeia
+                task.Name = novoNome;
+
+                if (result == DialogResult.Yes)
+                {
+                    bool eraAtiva = (_activeTask != null && _activeTask.Id == task.Id);
+
+                    // Finaliza corretamente a contagem atual
+                    if (eraAtiva && task.LastStartTime.HasValue)
+                    {
+                        var elapsed = DateTime.Now - task.LastStartTime.Value;
+                        task.TotalTime = task.TotalTime.Add(elapsed);
+                    }
+
+                    // Zera o tempo
+                    task.TotalTime = TimeSpan.Zero;
+
+                    if (eraAtiva)
+                    {
+                        // 🔥 continua ativa e reinicia contagem
+                        task.LastStartTime = DateTime.Now;
+                        _activeTask = task;
+                        task.State = TaskState.Ativa;
+                    }
+                    else
+                    {
+                        task.LastStartTime = null;
+                    }
+                }
+
+
+                AtualizarBotao(_botaoSelecionado, task);
+                _repository.SalvarTarefas(_tasks);
+            }
+            finally
+            {
+                _finalizandoEdicao = false;
+            }
+        }
+
+        #endregion
 
     }
 }
