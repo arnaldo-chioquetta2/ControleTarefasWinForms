@@ -139,21 +139,26 @@ namespace ControleTarefasWinForms
 
             AtualizarBotao(button, task);
 
-            // 🔹 Clique: seleciona o botão + executa lógica normal
+            // 🔹 Clique normal (seleção + lógica)
             button.Click += (s, e) =>
             {
-                _botaoSelecionado = button;   // marca como selecionado
-                BotaoTarefa_Click(s, e);      // mantém comportamento existente
+                _botaoSelecionado = button;
+                BotaoTarefa_Click(s, e);
             };
 
-            // 🔹 Botão direito (menu / desabilitar / excluir)
+            // 🔥 EVENTOS DE DRAG (ESTAVAM FALTANDO)
+            button.MouseDown += BotaoTarefa_MouseDown;
+            button.MouseMove += BotaoTarefa_MouseMove;
+
+            // 🔹 Menu / desabilitar / excluir
             button.MouseUp += BotaoTarefa_MouseUp;
 
-            // 🔹 Mouse saiu da área (minimização automática)
+            // 🔹 Controle de mouse fora
             button.MouseLeave += MainForm_MouseLeave;
 
             return button;
         }
+
 
         #endregion
 
@@ -175,31 +180,36 @@ namespace ControleTarefasWinForms
 
         private void BotaoTarefa_MouseDown(object sender, MouseEventArgs e)
         {
-            if (e.Button != MouseButtons.Left)
-                return;
+            if (sender is Button btn && btn.Tag is TaskModel task)
+            {
+                _dragArmed = true;
+                _dragStartPoint = e.Location;
 
-            _dragButton = sender as Button;
-            _dragStartPoint = e.Location;
-            _dragArmed = true;
+                Debug.WriteLine($"[Drag] MouseDown → Task Id={task.Id}, Name={task.Name}");
+            }
         }
 
         private void BotaoTarefa_MouseMove(object sender, MouseEventArgs e)
         {
-            if (!_dragArmed || _dragButton == null)
+            if (!_dragArmed)
                 return;
 
-            Rectangle dragRect = new Rectangle(
-                _dragStartPoint.X - SystemInformation.DragSize.Width / 2,
-                _dragStartPoint.Y - SystemInformation.DragSize.Height / 2,
-                SystemInformation.DragSize.Width,
-                SystemInformation.DragSize.Height
-            );
+            var btn = sender as Button;
+            if (btn == null)
+                return;
 
-            if (!dragRect.Contains(e.Location))
-            {
-                _dragArmed = false;
-                DoDragDrop(_dragButton, DragDropEffects.Move);
-            }
+            var task = btn.Tag as TaskModel;
+            if (task == null)
+                return;
+
+            if (Math.Abs(e.X - _dragStartPoint.X) < SystemInformation.DragSize.Width &&
+                Math.Abs(e.Y - _dragStartPoint.Y) < SystemInformation.DragSize.Height)
+                return;
+
+            Debug.WriteLine($"[Drag] DoDragDrop START → Task Id={task.Id}, Name={task.Name}");
+
+            _dragArmed = false;
+            btn.DoDragDrop(btn, DragDropEffects.Move);
         }
 
         #endregion
@@ -348,30 +358,6 @@ namespace ControleTarefasWinForms
             };
 
             return btn;
-        }
-
-        private void MoverTarefaParaBlocoDesabilitadas(TaskModel task)
-        {
-            if (task == null)
-                return;
-
-            // Remove da posição atual
-            _tasks.Remove(task);
-
-            // Procura a primeira desabilitada existente
-            int indexPrimeiraDesabilitada =
-                _tasks.FindIndex(t => t.State == TaskState.Desabilitada);
-
-            if (indexPrimeiraDesabilitada == -1)
-            {
-                // Nenhuma desabilitada ainda → vai para o final
-                _tasks.Add(task);
-            }
-            else
-            {
-                // Entra como a PRIMEIRA das desabilitadas
-                _tasks.Insert(indexPrimeiraDesabilitada, task);
-            }
         }
 
         private void ApagarTarefa(TaskModel task)
@@ -723,37 +709,115 @@ namespace ControleTarefasWinForms
             }
         }
 
+        #region DragInDrop
+
         private void FlpTasks_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(typeof(Button)))
-                e.Effect = DragDropEffects.Move;
-        }
+            Debug.WriteLine("[DragOver] chamado");
 
-        private void FlpTasks_DragDrop(object sender, DragEventArgs e)
-        {
-            var draggedButton = (Button)e.Data.GetData(typeof(Button));
+            if (!e.Data.GetDataPresent(typeof(Button)))
+            {
+                Debug.WriteLine("[DragOver] Data não é Button");
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            var draggedButton = e.Data.GetData(typeof(Button)) as Button;
+            Debug.WriteLine($"[DragOver] DraggedButton ok? {draggedButton != null}");
+
+            if (!EhBotaoDeTarefa(draggedButton))
+            {
+                Debug.WriteLine("[DragOver] DraggedButton NÃO é tarefa");
+                e.Effect = DragDropEffects.None;
+                return;
+            }
 
             Point point = flpTasks.PointToClient(new Point(e.X, e.Y));
             Control target = flpTasks.GetChildAtPoint(point);
 
-            if (target == null || target == draggedButton)
+            Debug.WriteLine($"[DragOver] Target = {target?.GetType().Name ?? "null"}");
+
+            if (!EhBotaoDeTarefa(target))
+            {
+                Debug.WriteLine("[DragOver] Target NÃO é tarefa");
+                e.Effect = DragDropEffects.None;
                 return;
+            }
 
-            int oldIndex = flpTasks.Controls.IndexOf(draggedButton);
-            int newIndex = flpTasks.Controls.IndexOf(target);
+            Debug.WriteLine("[DragOver] OK → Move");
+            e.Effect = DragDropEffects.Move;
+        }
 
-            if (oldIndex == newIndex)
+
+        private bool EhBotaoDeTarefa(Control control)
+        {
+            return control is Button btn && btn.Tag is TaskModel;
+        }
+
+        private void FlpTasks_DragDrop(object sender, DragEventArgs e)
+        {
+            Debug.WriteLine("[DragDrop] chamado");
+
+            var draggedButton = e.Data.GetData(typeof(Button)) as Button;
+            Debug.WriteLine($"[DragDrop] DraggedButton null? {draggedButton == null}");
+
+            if (!EhBotaoDeTarefa(draggedButton))
+            {
+                Debug.WriteLine("[DragDrop] DraggedButton NÃO é tarefa");
                 return;
-
-            flpTasks.Controls.SetChildIndex(draggedButton, newIndex);
-            flpTasks.Invalidate();
+            }
 
             var draggedTask = draggedButton.Tag as TaskModel;
-            _tasks.Remove(draggedTask);
+            Debug.WriteLine($"[DragDrop] DraggedTask Id={draggedTask?.Id}");
+
+            Point point = flpTasks.PointToClient(new Point(e.X, e.Y));
+            Control target = flpTasks.GetChildAtPoint(point);
+
+            Debug.WriteLine($"[DragDrop] Target = {target?.GetType().Name ?? "null"}");
+
+            if (!EhBotaoDeTarefa(target))
+            {
+                Debug.WriteLine("[DragDrop] Target NÃO é tarefa");
+                return;
+            }
+
+            var targetTask = (target as Button)?.Tag as TaskModel;
+            Debug.WriteLine($"[DragDrop] TargetTask Id={targetTask?.Id}");
+
+            bool draggedIsDisabled = draggedTask.State == TaskState.Desabilitada;
+            bool targetIsDisabled = targetTask.State == TaskState.Desabilitada;
+
+            Debug.WriteLine($"[DragDrop] draggedIsDisabled={draggedIsDisabled}, targetIsDisabled={targetIsDisabled}");
+
+            if (draggedIsDisabled != targetIsDisabled)
+            {
+                Debug.WriteLine("[DragDrop] BLOQUEADO por bloco diferente");
+                return;
+            }
+
+            int oldIndex = _tasks.IndexOf(draggedTask);
+            int newIndex = _tasks.IndexOf(targetTask);
+
+            Debug.WriteLine($"[DragDrop] oldIndex={oldIndex}, newIndex={newIndex}");
+
+            if (oldIndex < 0 || newIndex < 0 || oldIndex == newIndex)
+            {
+                Debug.WriteLine("[DragDrop] Índices inválidos");
+                return;
+            }
+
+            _tasks.RemoveAt(oldIndex);
             _tasks.Insert(newIndex, draggedTask);
 
+            Debug.WriteLine("[DragDrop] Reordenado com sucesso");
+
+            RecriarListaVisual();
             _repository.SalvarTarefas(_tasks);
         }
+
+
+
+        #endregion
 
         #region F2
 
