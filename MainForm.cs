@@ -222,8 +222,10 @@ namespace ControleTarefasWinForms
                 return;
 
             var button = sender as Button;
-            var task = button.Tag as TaskModel;
+            if (button == null)
+                return;
 
+            var task = button.Tag as TaskModel;
             if (task == null)
                 return;
 
@@ -236,8 +238,14 @@ namespace ControleTarefasWinForms
                 MessageBoxButtons.YesNoCancel,
                 MessageBoxIcon.Question);
 
+            // ─────────────────────────────
+            // DESABILITAR / REABILITAR
+            // ─────────────────────────────
             if (result == DialogResult.Yes)
             {
+                bool estavaDesabilitada = task.State == TaskState.Desabilitada;
+
+                // Se a tarefa estava ativa, finalize corretamente
                 if (_activeTask != null && _activeTask.Id == task.Id)
                 {
                     if (_activeTask.LastStartTime.HasValue)
@@ -249,20 +257,64 @@ namespace ControleTarefasWinForms
                     _activeTask.LastStartTime = null;
                     _activeTask = null;
                 }
-                task.State = TaskState.Desabilitada;
 
-                // garante que desabilitadas vão para baixo
-                ReordenarTarefasDesabilitadasParaBaixo();
+                if (estavaDesabilitada)
+                {
+                    // 🔼 REABILITAR
+                    task.State = TaskState.Pendente;
 
-                // recria UI na nova ordem
+                    // Move para cima do separador, como última ativa
+                    MoverTarefaReabilitadaParaUltimaAtiva(task);
+                }
+                else
+                {
+                    // 🔽 DESABILITAR
+                    task.State = TaskState.Desabilitada;
+
+                    // Garante que vá para o bloco das desabilitadas
+                    ReordenarTarefasDesabilitadasParaBaixo();
+                }
+
+                // Recria UI (ordem + agrupador)
                 RecriarListaVisual();
 
                 _repository.SalvarTarefas(_tasks);
                 return;
             }
-            else if (result == DialogResult.No)
+
+            // ─────────────────────────────
+            // EXCLUIR
+            // ─────────────────────────────
+            if (result == DialogResult.No)
             {
                 ApagarTarefa(task);
+                return;
+            }
+
+            // Cancelar → não faz nada
+        }
+
+        private void MoverTarefaReabilitadaParaUltimaAtiva(TaskModel task)
+        {
+            if (task == null)
+                return;
+
+            // Remove da posição atual
+            _tasks.Remove(task);
+
+            // Encontra a primeira desabilitada
+            int indexPrimeiraDesabilitada =
+                _tasks.FindIndex(t => t.State == TaskState.Desabilitada);
+
+            if (indexPrimeiraDesabilitada == -1)
+            {
+                // Não há desabilitadas → adiciona no final
+                _tasks.Add(task);
+            }
+            else
+            {
+                // Insere imediatamente ANTES do bloco de desabilitadas
+                _tasks.Insert(indexPrimeiraDesabilitada, task);
             }
         }
 
@@ -439,128 +491,130 @@ namespace ControleTarefasWinForms
 
                     break;
 
-                    //case TaskState.Desabilitada:
-                    //    // Desabilitada -> cinza (menos chamativa)
-                    //    button.BackColor = Color.Gainsboro;
-                    //    button.ForeColor = Color.DimGray;
-                    //    break;
             }
 
             button.Text = $"{task.Name} - {task.FormattedTime}";
         }
-        
 
         private void BotaoTarefa_Click(object sender, EventArgs e)
         {
-            var button = sender as Button;
-            var clickedTask = button?.Tag as TaskModel;
-
+            _dragArmed = false;
+            var clickedTask = ObterTarefaClicada(sender);
             if (clickedTask == null)
                 return;
-
-            // Marca que uma tarefa foi clicada
             _tarefaClicadaRecentemente = true;
-
-            // REGRA 1: Clicar novamente na tarefa ATIVA → pausa
-            if (_activeTask != null && _activeTask.Id == clickedTask.Id)
-            {
-                if (_activeTask.LastStartTime.HasValue)
-                {
-                    var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
-                    _activeTask.TotalTime = _activeTask.TotalTime.Add(elapsed);
-                }
-
-                _activeTask.State = TaskState.Pausada;
-                _activeTask.LastStartTime = null;
-                _activeTask = null;
-
-                AtualizarInterfaceTarefas();
-                _repository.SalvarTarefas(_tasks);
+            if (TratarTarefaDesabilitada(clickedTask))
                 return;
-            }
-
-            // REGRA 2: Clicar em uma tarefa PAUSADA → volta a ser ATIVA
-            if (clickedTask.State == TaskState.Pausada)
-            {
-                if (_activeTask != null && _activeTask.LastStartTime.HasValue)
-                {
-                    var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
-                    _activeTask.TotalTime = _activeTask.TotalTime.Add(elapsed);
-                    _activeTask.LastStartTime = null;
-                    _activeTask.State = TaskState.JaClicada;
-                }
-
-                _activeTask = clickedTask;
-                _activeTask.State = TaskState.Ativa;
-                _activeTask.LastStartTime = DateTime.Now;
-
-                AtualizarInterfaceTarefas();
-                _repository.SalvarTarefas(_tasks);
+            if (TratarCliqueNaTarefaAtiva(clickedTask))
                 return;
-            }
+            if (TratarCliqueNaTarefaPausada(clickedTask))
+                return;
+            TratarFluxoNormal(clickedTask);
+        }
 
-            // LÓGICA NORMAL: Clique em OUTRA tarefa
-
-            // 1. Finaliza contagem da tarefa ativa (se houver)
-            if (_activeTask != null && _activeTask.LastStartTime.HasValue)
-            {
-                var elapsed = DateTime.Now - _activeTask.LastStartTime.Value;
-                _activeTask.TotalTime = _activeTask.TotalTime.Add(elapsed);
-                _activeTask.LastStartTime = null;
-            }
-
-            // 2. Se existir alguma tarefa PAUSADA (diferente da clicada), ela vira "JáClicada"
-            var tarefaPausada = _tasks
-                .FirstOrDefault(t => t.State == TaskState.Pausada && t.Id != clickedTask.Id);
-
-            if (tarefaPausada != null)
-            {
-                tarefaPausada.State = TaskState.JaClicada;
-            }
-
-            // 3. Obter lista de tarefas válidas (ignora desabilitadas)
-            var tarefasValidas = _tasks
-                .Where(t => t.State != TaskState.Desabilitada)
-                .ToList();
-
-            // 4. Verificar se precisa resetar o ciclo
-            bool resetarCiclo = false;
-
-            if (_activeTask != null)
-            {
-                var ultimaTarefaValida = tarefasValidas.LastOrDefault();
-
-                if (ultimaTarefaValida != null &&
-                    _activeTask.Id == ultimaTarefaValida.Id &&
-                    clickedTask.Id != ultimaTarefaValida.Id)
-                {
-                    resetarCiclo = true;
-                }
-            }
-
-            if (resetarCiclo)
-            {
-                foreach (var task in _tasks)
-                {
-                    if (task.State != TaskState.Desabilitada)
-                        task.State = TaskState.Pendente;
-                }
-            }
+        private TaskModel ObterTarefaClicada(object sender)
+        {
+            var button = sender as Button;
+            var task = button?.Tag as TaskModel;
+            if (task == null)
+                Debug.WriteLine("[Click] clickedTask é null");
             else
-            {
-                if (_activeTask != null)
-                    _activeTask.State = TaskState.JaClicada;
-            }
+                Debug.WriteLine($"[Click] DISPAROU → Id={task.Id}, Name={task.Name}, State={task.State}");
+            return task;
+        }
 
-            // 5. Ativa a nova tarefa
+        private bool TratarTarefaDesabilitada(TaskModel clickedTask)
+        {
+            if (clickedTask.State != TaskState.Desabilitada)
+                return false;
+            clickedTask.State = TaskState.Pendente;
+            MoverTarefaReabilitadaParaUltimaAtiva(clickedTask);
+            FinalizarTarefaAtivaSeNecessario();
             _activeTask = clickedTask;
             _activeTask.State = TaskState.Ativa;
             _activeTask.LastStartTime = DateTime.Now;
+            RecriarListaVisual();
+            _repository.SalvarTarefas(_tasks);
+            return true;
+        }
 
-            // 6. Atualiza UI e salva
+        private bool TratarCliqueNaTarefaAtiva(TaskModel clickedTask)
+        {
+            if (_activeTask == null || _activeTask.Id != clickedTask.Id)
+                return false;
+            if (_activeTask.LastStartTime.HasValue)
+                AcumularTempo(_activeTask);
+            _activeTask.State = TaskState.Pausada;
+            _activeTask.LastStartTime = null;
+            _activeTask = null;
+            AtualizarInterfaceTarefas();
+            _repository.SalvarTarefas(_tasks);
+            return true;
+        }
+
+        private bool TratarCliqueNaTarefaPausada(TaskModel clickedTask)
+        {
+            if (clickedTask.State != TaskState.Pausada)
+                return false;
+            FinalizarTarefaAtivaSeNecessario();
+            _activeTask = clickedTask;
+            _activeTask.State = TaskState.Ativa;
+            _activeTask.LastStartTime = DateTime.Now;
+            AtualizarInterfaceTarefas();
+            _repository.SalvarTarefas(_tasks);
+            return true;
+        }
+
+        private void TratarFluxoNormal(TaskModel clickedTask)
+        {
+            FinalizarTarefaAtivaSeNecessario();
+
+            var tarefaPausada = _tasks.FirstOrDefault(t => t.State == TaskState.Pausada && t.Id != clickedTask.Id);
+            if (tarefaPausada != null)
+                tarefaPausada.State = TaskState.JaClicada;
+
+            if (DeveResetarCiclo(clickedTask))
+            {
+                foreach (var task in _tasks)
+                    if (task.State != TaskState.Desabilitada)
+                        task.State = TaskState.Pendente;
+            }
+            else if (_activeTask != null)
+                _activeTask.State = TaskState.JaClicada;
+            _activeTask = clickedTask;
+            _activeTask.State = TaskState.Ativa;
+            _activeTask.LastStartTime = DateTime.Now;
             AtualizarInterfaceTarefas();
             _repository.SalvarTarefas(_tasks);
         }
+
+        private void FinalizarTarefaAtivaSeNecessario()
+        {
+            if (_activeTask == null)
+                return;
+            if (_activeTask.LastStartTime.HasValue)
+                AcumularTempo(_activeTask);
+            _activeTask.LastStartTime = null;
+            _activeTask.State = TaskState.JaClicada;
+        }
+
+        private void AcumularTempo(TaskModel task)
+        {
+            var elapsed = DateTime.Now - task.LastStartTime.Value;
+            task.TotalTime = task.TotalTime.Add(elapsed);
+        }
+
+        private bool DeveResetarCiclo(TaskModel clickedTask)
+        {
+            if (_activeTask == null)
+                return false;
+            var tarefasValidas = _tasks.Where(t => t.State != TaskState.Desabilitada).ToList();
+            var ultimaTarefaValida = tarefasValidas.LastOrDefault();
+            if (ultimaTarefaValida == null)
+                return false;
+            return _activeTask.Id == ultimaTarefaValida.Id && clickedTask.Id != ultimaTarefaValida.Id;
+        }
+
 
         /// <summary>
         /// Atualiza todos os botões
