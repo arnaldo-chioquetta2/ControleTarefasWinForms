@@ -108,7 +108,7 @@ namespace ControleTarefasWinForms
             if (flpTasks.Controls.Count == 0)
                 return;
 
-            AjustarAlturaJanelaSeNecessario();
+            AjustarAlturaJanelaAoConteudo();
         }
 
         private void CriarBotoesTarefas()
@@ -278,6 +278,11 @@ namespace ControleTarefasWinForms
                 // Recria UI (ordem + agrupador)
                 RecriarListaVisual();
 
+                BeginInvoke((Action)(() =>
+                {
+                    AjustarAlturaJanelaAoConteudo();
+                }));
+
                 _repository.SalvarTarefas(_tasks);
                 return;
             }
@@ -394,20 +399,32 @@ namespace ControleTarefasWinForms
 
             btn.Click += (s, e) =>
             {
-                bool expandindo = !_desabilitadosExpandidos;
+                _desabilitadosExpandidos = !_desabilitadosExpandidos;
 
-                _desabilitadosExpandidos = expandindo;
                 RecriarListaVisual();
 
-                // 🔥 Só ajusta altura ao EXPANDIR
-                if (expandindo)
+                BeginInvoke((Action)(() =>
                 {
-                    BeginInvoke((Action)(() =>
-                    {
-                        AjustarAlturaJanelaSeNecessario();
-                    }));
-                }
-            };
+                    AjustarAlturaJanelaAoConteudo();
+                }));
+            };  
+
+            //btn.Click += (s, e) =>
+            //{
+            //    bool expandindo = !_desabilitadosExpandidos;
+
+            //    _desabilitadosExpandidos = expandindo;
+            //    RecriarListaVisual();
+
+            //    // 🔥 Só ajusta altura ao EXPANDIR
+            //    if (expandindo)
+            //    {
+            //        BeginInvoke((Action)(() =>
+            //        {
+            //            AjustarAlturaJanelaAoConteudo();
+            //        }));
+            //    }
+            //};
 
             return btn;
         }
@@ -443,6 +460,12 @@ namespace ControleTarefasWinForms
             }
 
             _repository.SalvarTarefas(_tasks);
+
+            BeginInvoke((Action)(() =>
+            {
+                AjustarAlturaJanelaAoConteudo();
+            }));
+
         }
 
         /// <summary>
@@ -569,21 +592,33 @@ namespace ControleTarefasWinForms
         {
             FinalizarTarefaAtivaSeNecessario();
 
-            var tarefaPausada = _tasks.FirstOrDefault(t => t.State == TaskState.Pausada && t.Id != clickedTask.Id);
+            var tarefaPausada = _tasks
+                .FirstOrDefault(t => t.State == TaskState.Pausada && t.Id != clickedTask.Id);
+
             if (tarefaPausada != null)
                 tarefaPausada.State = TaskState.JaClicada;
 
             if (DeveResetarCiclo(clickedTask))
             {
                 foreach (var task in _tasks)
-                    if (task.State != TaskState.Desabilitada)
+                {
+                    // 🔒 Mantém tarefas pausadas e desabilitadas intactas
+                    if (task.State != TaskState.Desabilitada &&
+                        task.State != TaskState.Pausada)
+                    {
                         task.State = TaskState.Pendente;
+                    }
+                }
             }
             else if (_activeTask != null)
+            {
                 _activeTask.State = TaskState.JaClicada;
+            }
+
             _activeTask = clickedTask;
             _activeTask.State = TaskState.Ativa;
             _activeTask.LastStartTime = DateTime.Now;
+
             AtualizarInterfaceTarefas();
             _repository.SalvarTarefas(_tasks);
         }
@@ -655,88 +690,79 @@ namespace ControleTarefasWinForms
             _tarefaClicadaRecentemente = false;
         }
 
-        /// <summary>
-        /// Evento do botão Adicionar Tarefa
-        /// </summary>
         private void btnAddTask_Click(object sender, EventArgs e)
         {
             using (var form = new AddTaskForm())
             {
-                if (form.ShowDialog() == DialogResult.OK)
+                if (form.ShowDialog() != DialogResult.OK)
+                    return;
+
+                var newTask = new TaskModel
                 {
-                    var newTask = new TaskModel
-                    {
-                        Id = _nextId++,
-                        Name = form.TaskName,
-                        TotalTime = TimeSpan.Zero,
-                        State = TaskState.Pendente,
-                        LastStartTime = null
-                    };
+                    Id = _nextId++,
+                    Name = form.TaskName,
+                    TotalTime = TimeSpan.Zero,
+                    State = TaskState.Pendente,
+                    LastStartTime = null
+                };
 
-                    _tasks.Add(newTask);
+                // 🔥 INSERE COMO ÚLTIMA TAREFA HABILITADA (ACIMA DO SEPARADOR)
+                MoverTarefaReabilitadaParaUltimaAtiva(newTask);
 
-                    var button = CriarBotaoTarefa(newTask);
-                    flpTasks.Controls.Add(button);
+                // 🔄 Recria a UI para respeitar a nova ordem
+                RecriarListaVisual();
 
-                    _repository.SalvarTarefas(_tasks);
+                // 💾 Persiste no repositório
+                _repository.SalvarTarefas(_tasks);
 
-                    AjustarAlturaJanelaSeNecessario();
-                }
+                // 📐 Ajusta altura da janela se necessário
+                AjustarAlturaJanelaAoConteudo();
             }
         }
 
 
-        private void AjustarAlturaJanelaSeNecessario()
-    {
-        Debug.WriteLine("==== AjustarAlturaJanelaSeNecessario (REAL) ====");
-
-        if (flpTasks.Controls.Count == 0)
+        private void AjustarAlturaJanelaAoConteudo()
         {
-            Debug.WriteLine("Nenhuma tarefa no painel.");
-            return;
+            if (flpTasks.Controls.Count == 0)
+                return;
+
+            flpTasks.PerformLayout();
+
+            int bottomMax = 0;
+
+            foreach (Control c in flpTasks.Controls)
+            {
+                if (!c.Visible)
+                    continue;
+
+                if (c.Bottom > bottomMax)
+                    bottomMax = c.Bottom;
+            }
+
+            int alturaConteudo = bottomMax + flpTasks.Padding.Bottom;
+
+            int alturaAreaVisivel = flpTasks.Height;
+
+            int diferenca = alturaConteudo - alturaAreaVisivel;
+
+            int novaAltura = this.Height + diferenca;
+
+            Rectangle areaTrabalho = Screen.FromControl(this).WorkingArea;
+
+            int alturaMaxima = areaTrabalho.Height;
+
+            if (novaAltura > alturaMaxima)
+                novaAltura = alturaMaxima;
+
+            if (novaAltura < 200)
+                novaAltura = 200;
+
+            this.Height = novaAltura;
         }
 
-        flpTasks.PerformLayout();
-
-        Control ultimo = flpTasks.Controls[flpTasks.Controls.Count - 1];
-
-        int bottomUltimoControle = ultimo.Bottom + flpTasks.Padding.Bottom;
-        int alturaVisivel = flpTasks.ClientSize.Height;
-
-        Debug.WriteLine($"Bottom do último controle: {ultimo.Bottom}");
-        Debug.WriteLine($"Altura visível do flpTasks: {alturaVisivel}");
-
-        if (bottomUltimoControle <= alturaVisivel)
-        {
-            Debug.WriteLine("❌ Último controle ainda está visível. Não vai redimensionar.");
-            return;
-        }
-
-        int diferenca = bottomUltimoControle - alturaVisivel;
-        Debug.WriteLine($"Diferença necessária: {diferenca}");
-
-        Rectangle areaTrabalho = Screen.FromControl(this).WorkingArea;
-
-        int alturaMaximaForm = areaTrabalho.Height;
-        int alturaAtual = this.Height;
-        int novaAltura = alturaAtual + diferenca;
-
-        Debug.WriteLine($"Altura atual do Form: {alturaAtual}");
-        Debug.WriteLine($"Altura desejada do Form: {novaAltura}");
-        Debug.WriteLine($"Altura máxima permitida: {alturaMaximaForm}");
-
-        int alturaFinal = Math.Min(novaAltura, alturaMaximaForm);
-
-        this.Height = alturaFinal;
-
-        Debug.WriteLine($"Altura final aplicada: {alturaFinal}");
-        Debug.WriteLine("=============================================");
-    }
-
-
-    /// <summary>
-    /// Evento de fechamento do formulário (salva antes de fechar)
-    /// </summary>
+        /// <summary>
+        /// Evento de fechamento do formulário (salva antes de fechar)
+        /// </summary>
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (_activeTask != null && _activeTask.LastStartTime.HasValue)
