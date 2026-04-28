@@ -33,6 +33,11 @@ namespace ControleTarefasWinForms.Models
         /// </summary>
         public DateTime? LastStartTime { get; set; }
 
+        /// <summary>
+        /// Anotação da tarefa
+        /// </summary>
+        public string Note { get; set; }
+
         public string FormattedTime
         {
             get
@@ -56,6 +61,5 @@ namespace ControleTarefasWinForms.Models
                 }
             }
         }
-
     }
 }

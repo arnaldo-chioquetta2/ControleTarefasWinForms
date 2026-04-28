@@ -32,14 +32,12 @@ namespace ControleTarefasWinForms.Services
             {
                 if (!_iniFile.FileExists())
                 {
-                    return tasks; // Retorna lista vazia se arquivo não existe
+                    return tasks;
                 }
 
-                // Lê a quantidade de tarefas
                 string countStr = _iniFile.Read("Geral", "Count", "0");
                 int count = int.Parse(countStr);
 
-                // Carrega cada tarefa
                 for (int i = 1; i <= count; i++)
                 {
                     string section = $"Tarefa_{i}";
@@ -50,9 +48,12 @@ namespace ControleTarefasWinForms.Services
                         Name = _iniFile.Read(section, "Nome", ""),
                         TotalTime = TimeSpan.FromSeconds(int.Parse(_iniFile.Read(section, "TotalSegundos", "0"))),
                         State = ParseState(_iniFile.Read(section, "State", "Pendente")),
-                        LastStartTime = null // Não continua contando de sessão anterior
+                        LastStartTime = null,
+                        Note = _iniFile.Read(section, "Nota", "")
                     };
-                    Console.WriteLine( $"[CarregarTarefas] Id={task.Id} | Nome={task.Name} | State={task.State}");
+
+                    Console.WriteLine($"[CarregarTarefas] Id={task.Id} | Nome={task.Name} | State={task.State}");
+
                     tasks.Add(task);
                 }
             }
@@ -92,6 +93,7 @@ namespace ControleTarefasWinForms.Services
                     _iniFile.Write(section, "Nome", task.Name);
                     _iniFile.Write(section, "TotalSegundos", ((int)task.TotalTime.TotalSeconds).ToString());
                     _iniFile.Write(section, "State", task.State.ToString());
+                    _iniFile.Write(section, "Nota", task.Note ?? "");
                 }
             }
             catch (Exception ex)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Reflection;
 using System.Windows.Forms;
 using ControleTarefasWinForms.Models;
 using ControleTarefasWinForms.Services;
@@ -14,6 +15,8 @@ namespace ControleTarefasWinForms
     /// </summary>
     public partial class MainForm : Form
     {
+        private const string TituloBase = "Controle de Tarefas";
+
         // Lista de tarefas em memória
         private List<TaskModel> _tasks;
         private Button _dragButton;
@@ -38,6 +41,7 @@ namespace ControleTarefasWinForms
         private TextBox _textBoxEdicao;
         private string _nomeOriginal;
         private bool _finalizandoEdicao;
+        private Font _fonteOriginalBotoes;
 
         #region Inicialização
 
@@ -72,24 +76,36 @@ namespace ControleTarefasWinForms
             foreach (var task in _tasks)
             {
                 Console.WriteLine(
-                        $"[MainForm_Load - ANTES] Id={task.Id} | Nome={task.Name} | State={task.State}"
-                    );
+                    $"[MainForm_Load - ANTES] Id={task.Id} | Nome={task.Name} | State={task.State}"
+                );
+
                 task.LastStartTime = null;
 
                 if (task.State == TaskState.Ativa)
                     task.State = TaskState.Pausada;
+
                 Console.WriteLine(
-                        $"[MainForm_Load - DEPOIS] Id={task.Id} | Nome={task.Name} | State={task.State}"
-                    );
+                    $"[MainForm_Load - DEPOIS] Id={task.Id} | Nome={task.Name} | State={task.State}"
+                );
             }
 
             RecriarListaVisual();
 
-            // Cria os botões e atualiza a interface
-            // CriarBotoesTarefas();
+            // Guarda a fonte original dos botões de tarefa
+            foreach (Control control in flpTasks.Controls)
+            {
+                var btn = control as Button;
+                if (btn != null && btn.Tag is TaskModel)
+                {
+                    _fonteOriginalBotoes = btn.Font;
+                    break;
+                }
+            }
 
-            // Define o título com versão
-            this.Text = "Controle de Tarefas";
+            AtualizarTituloFormulario();
+
+            // Se já abrir maximizado, aplica a escala imediatamente
+            MainForm_Resize(this, EventArgs.Empty);
 
             // Inicia o timer global
             timerGlobal.Start();
@@ -142,7 +158,6 @@ namespace ControleTarefasWinForms
             // 🔹 Clique normal (seleção + lógica)
             button.Click += (s, e) =>
             {
-                _botaoSelecionado = button;
                 BotaoTarefa_Click(s, e);
             };
 
@@ -354,8 +369,10 @@ namespace ControleTarefasWinForms
             // 1. Adiciona tarefas normais
             foreach (var task in tarefasAtivas)
             {
-                var button = CriarBotaoTarefa(task);
-                flpTasks.Controls.Add(button);
+                //var button = CriarBotaoTarefa(task);
+                //flpTasks.Controls.Add(button);
+                var item = CriarItemTarefa(task);
+                flpTasks.Controls.Add(item);
             }
 
             // 2. Se houver desabilitadas, adiciona o botão agrupador
@@ -369,8 +386,10 @@ namespace ControleTarefasWinForms
                 {
                     foreach (var task in tarefasDesabilitadas)
                     {
-                        var button = CriarBotaoTarefa(task);
-                        flpTasks.Controls.Add(button);
+                        //var button = CriarBotaoTarefa(task);
+                        //flpTasks.Controls.Add(button);
+                        var item = CriarItemTarefa(task);
+                        flpTasks.Controls.Add(item);
                     }
                 }
             }
@@ -516,7 +535,15 @@ namespace ControleTarefasWinForms
 
             }
 
-            button.Text = $"{task.Name} - {task.FormattedTime}";
+            var texto = $"{task.Name} - {task.FormattedTime}";
+
+            if (!string.IsNullOrWhiteSpace(task.Note))
+            {
+                texto += $" | {CortarTexto(task.Note, 60)}";
+            }
+
+            button.Text = texto;
+
         }
 
         private void BotaoTarefa_Click(object sender, EventArgs e)
@@ -528,6 +555,7 @@ namespace ControleTarefasWinForms
             _tarefaClicadaRecentemente = true;
             if (TratarTarefaDesabilitada(clickedTask))
                 return;
+            _botaoSelecionado = sender as Button;
             if (TratarCliqueNaTarefaAtiva(clickedTask))
                 return;
             if (TratarCliqueNaTarefaPausada(clickedTask))
@@ -552,10 +580,6 @@ namespace ControleTarefasWinForms
                 return false;
             clickedTask.State = TaskState.Pendente;
             MoverTarefaReabilitadaParaUltimaAtiva(clickedTask);
-            FinalizarTarefaAtivaSeNecessario();
-            _activeTask = clickedTask;
-            _activeTask.State = TaskState.Ativa;
-            _activeTask.LastStartTime = DateTime.Now;
             RecriarListaVisual();
             _repository.SalvarTarefas(_tasks);
             return true;
@@ -592,12 +616,6 @@ namespace ControleTarefasWinForms
         {
             FinalizarTarefaAtivaSeNecessario();
 
-            var tarefaPausada = _tasks
-                .FirstOrDefault(t => t.State == TaskState.Pausada && t.Id != clickedTask.Id);
-
-            if (tarefaPausada != null)
-                tarefaPausada.State = TaskState.JaClicada;
-
             if (DeveResetarCiclo(clickedTask))
             {
                 foreach (var task in _tasks)
@@ -621,6 +639,12 @@ namespace ControleTarefasWinForms
 
             AtualizarInterfaceTarefas();
             _repository.SalvarTarefas(_tasks);
+        }
+
+        private void AtualizarTituloFormulario()
+        {
+            var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0.0";
+            Text = $"{TituloBase} v{version}";
         }
 
         private void FinalizarTarefaAtivaSeNecessario()
@@ -658,13 +682,38 @@ namespace ControleTarefasWinForms
         {
             foreach (Control control in flpTasks.Controls)
             {
-                if (control is Button button && button.Tag is TaskModel task)
+                // Botão agrupador "Desabilitados"
+                if (control is Button botaoAgrupador)
                 {
-                    AtualizarBotao(button, task);
+                    continue;
+                }
+
+                // Item de tarefa agora é Panel
+                if (control is Panel panel && panel.Tag is TaskModel task)
+                {
+                    foreach (Control child in panel.Controls)
+                    {
+                        if (child is Button button && button.Tag is TaskModel)
+                        {
+                            // Botão principal da tarefa
+                            if (button.Name == "btnTarefa")
+                            {
+                                AtualizarBotao(button, task);
+                            }
+
+                            // Botão de anotação
+                            if (button.Name == "btnNota")
+                            {
+                                button.Text = string.IsNullOrWhiteSpace(task.Note) ? "N" : "N!";
+                                button.BackColor = string.IsNullOrWhiteSpace(task.Note)
+                                    ? Color.Gainsboro
+                                    : Color.Gold;
+                            }
+                        }
+                    }
                 }
             }
         }
-
         /// <summary>
         /// Timer global que atualiza o tempo da tarefa ativa a cada segundo
         /// </summary>
@@ -719,7 +768,6 @@ namespace ControleTarefasWinForms
                 AjustarAlturaJanelaAoConteudo();
             }
         }
-
 
         private void AjustarAlturaJanelaAoConteudo()
         {
@@ -780,13 +828,114 @@ namespace ControleTarefasWinForms
         /// </summary>
         private void MainForm_Resize(object sender, EventArgs e)
         {
+            bool maximizado = this.WindowState == FormWindowState.Maximized;
+
+            int alturaTarefa = maximizado ? 90 : 60;
+            int alturaAgrupador = maximizado ? 45 : 30;
+            int larguraTotal = flpTasks.Width - 25;
+            int larguraBotaoNota = maximizado ? 60 : 40;
+
             foreach (Control control in flpTasks.Controls)
             {
-                if (control is Button button)
+                // Botão agrupador "Desabilitados"
+                if (control is Button botaoAgrupador && !(botaoAgrupador.Tag is TaskModel))
                 {
-                    button.Width = flpTasks.Width - 25;
+                    botaoAgrupador.Width = larguraTotal;
+                    botaoAgrupador.Height = alturaAgrupador;
+
+                    if (_fonteOriginalBotoes != null)
+                    {
+                        float tamanhoFonteAgrupador = maximizado
+                            ? _fonteOriginalBotoes.Size * 1.6f
+                            : 9f;
+
+                        botaoAgrupador.Font = new Font(
+                            _fonteOriginalBotoes.FontFamily,
+                            tamanhoFonteAgrupador,
+                            FontStyle.Bold
+                        );
+                    }
+
+                    continue;
+                }
+
+                // Item de tarefa
+                if (control is Panel panel && panel.Tag is TaskModel task)
+                {
+                    panel.Width = larguraTotal;
+                    panel.Height = alturaTarefa;
+
+                    foreach (Control child in panel.Controls)
+                    {
+                        var button = child as Button;
+                        if (button == null)
+                            continue;
+
+                        if (button.Name == "btnTarefa")
+                        {
+                            button.Location = new Point(0, 0);
+                            button.Width = panel.Width - larguraBotaoNota;
+                            button.Height = panel.Height;
+
+                            if (_fonteOriginalBotoes != null)
+                            {
+                                float tamanhoFonte = maximizado
+                                    ? _fonteOriginalBotoes.Size * 2.2f
+                                    : _fonteOriginalBotoes.Size;
+
+                                button.Font = new Font(
+                                    _fonteOriginalBotoes.FontFamily,
+                                    tamanhoFonte,
+                                    _fonteOriginalBotoes.Style
+                                );
+                            }
+                        }
+                        else if (button.Name == "btnNota")
+                        {
+                            button.Location = new Point(panel.Width - larguraBotaoNota, 0);
+                            button.Width = larguraBotaoNota;
+                            button.Height = panel.Height;
+
+                            if (_fonteOriginalBotoes != null)
+                            {
+                                float tamanhoFonteNota = maximizado
+                                    ? _fonteOriginalBotoes.Size * 1.6f
+                                    : 9f;
+
+                                button.Font = new Font(
+                                    _fonteOriginalBotoes.FontFamily,
+                                    tamanhoFonteNota,
+                                    FontStyle.Bold
+                                );
+                            }
+                        }
+                    }
                 }
             }
+        }
+
+        private TaskModel ObterTaskDoControl(Control control)
+        {
+            if (control == null)
+                return null;
+
+            var task = control.Tag as TaskModel;
+            if (task != null)
+                return task;
+
+            if (control.Parent != null)
+            {
+                var parentTask = control.Parent.Tag as TaskModel;
+                if (parentTask != null)
+                    return parentTask;
+            }
+
+            return null;
+        }
+
+        private bool EhItemDeTarefa(Control control)
+        {
+            return ObterTaskDoControl(control) != null;
         }
 
         #region DragInDrop
@@ -894,8 +1043,6 @@ namespace ControleTarefasWinForms
             RecriarListaVisual();
             _repository.SalvarTarefas(_tasks);
         }
-
-
 
         #endregion
 
@@ -1054,6 +1201,93 @@ namespace ControleTarefasWinForms
                 _finalizandoEdicao = false;
             }
         }
+
+        #endregion
+
+        #region Notas das tarefas
+
+        private string CortarTexto(string texto, int max)
+        {
+            if (string.IsNullOrWhiteSpace(texto))
+                return "";
+
+            texto = texto.Replace(Environment.NewLine, " ");
+
+            if (texto.Length <= max)
+                return texto;
+
+            return texto.Substring(0, max) + "...";
+        }
+
+        private Panel CriarItemTarefa(TaskModel task)
+        {
+            var panel = new Panel
+            {
+                Tag = task,
+                Width = flpTasks.Width - 25,
+                Height = 60,
+                Margin = new Padding(3)
+            };
+
+            var btnTarefa = CriarBotaoTarefa(task);
+            btnTarefa.Name = "btnTarefa";
+            btnTarefa.Width = panel.Width - 45;
+            btnTarefa.Height = panel.Height;
+            btnTarefa.Location = new Point(0, 0);
+
+            var btnNota = new Button
+            {
+                Name = "btnNota",
+                Tag = task,
+                Width = 40,
+                Height = panel.Height,
+                Location = new Point(panel.Width - 40, 0),
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
+
+            AtualizarBotaoNota(btnNota, task);
+
+            btnNota.Click += (s, e) =>
+            {
+                AbrirAnotacao(task);
+            };
+
+            panel.Controls.Add(btnTarefa);
+            panel.Controls.Add(btnNota);
+
+            return panel;
+        }
+
+        private void AbrirAnotacao(TaskModel task)
+        {
+            if (task == null)
+                return;
+
+            using (var form = new TaskNoteForm(task.Name, task.Note))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                task.Note = form.NoteText ?? "";
+
+                RecriarListaVisual();
+                _repository.SalvarTarefas(_tasks);
+            }
+        }
+
+        private void AtualizarBotaoNota(Button btnNota, TaskModel task)
+        {
+            bool temNota = !string.IsNullOrWhiteSpace(task.Note);
+
+            btnNota.Text = temNota ? "N!" : "N";
+            btnNota.BackColor = temNota ? Color.Gold : Color.Gainsboro;
+            btnNota.ForeColor = temNota ? Color.Black : Color.DimGray;
+            btnNota.FlatStyle = FlatStyle.Flat;
+            btnNota.FlatAppearance.BorderSize = 0;
+            btnNota.Cursor = Cursors.Hand;
+        }
+
+
 
         #endregion
 
