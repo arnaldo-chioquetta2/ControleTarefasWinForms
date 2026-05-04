@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Windows.Forms;
 using ControleTarefasWinForms.Models;
 
@@ -49,7 +50,7 @@ namespace ControleTarefasWinForms.Services
                         TotalTime = TimeSpan.FromSeconds(int.Parse(_iniFile.Read(section, "TotalSegundos", "0"))),
                         State = ParseState(_iniFile.Read(section, "State", "Pendente")),
                         LastStartTime = null,
-                        Note = _iniFile.Read(section, "Nota", "")
+                        Note = DecodeNote(_iniFile.Read(section, "Nota", ""))
                     };
 
                     Console.WriteLine($"[CarregarTarefas] Id={task.Id} | Nome={task.Name} | State={task.State}");
@@ -93,7 +94,7 @@ namespace ControleTarefasWinForms.Services
                     _iniFile.Write(section, "Nome", task.Name);
                     _iniFile.Write(section, "TotalSegundos", ((int)task.TotalTime.TotalSeconds).ToString());
                     _iniFile.Write(section, "State", task.State.ToString());
-                    _iniFile.Write(section, "Nota", task.Note ?? "");
+                    _iniFile.Write(section, "Nota", EncodeNote(task.Note ?? ""));
                 }
             }
             catch (Exception ex)
@@ -124,6 +125,31 @@ namespace ControleTarefasWinForms.Services
 
             Console.WriteLine("[ParseState] Falha no parse → Pendente");
             return TaskState.Pendente;
+        }
+
+        private string EncodeNote(string note)
+        {
+            if (string.IsNullOrEmpty(note))
+                return "";
+
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(note));
+        }
+
+        private string DecodeNote(string storedValue)
+        {
+            if (string.IsNullOrWhiteSpace(storedValue))
+                return "";
+
+            try
+            {
+                var bytes = Convert.FromBase64String(storedValue);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch (FormatException)
+            {
+                // Compatibilidade com arquivos antigos em texto puro.
+                return storedValue;
+            }
         }
     }
 }

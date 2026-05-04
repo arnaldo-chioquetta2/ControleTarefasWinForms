@@ -79,10 +79,15 @@ namespace ControleTarefasWinForms
                     $"[MainForm_Load - ANTES] Id={task.Id} | Nome={task.Name} | State={task.State}"
                 );
 
-                task.LastStartTime = null;
-
                 if (task.State == TaskState.Ativa)
-                    task.State = TaskState.Pausada;
+                {
+                    _activeTask = task;
+                    task.LastStartTime = DateTime.Now;
+                }
+                else
+                {
+                    task.LastStartTime = null;
+                }
 
                 Console.WriteLine(
                     $"[MainForm_Load - DEPOIS] Id={task.Id} | Nome={task.Name} | State={task.State}"
@@ -452,30 +457,41 @@ namespace ControleTarefasWinForms
         {
             if (task == null) return;
 
-            if (_activeTask != null && _activeTask.Id == task.Id)
+            var taskId = task.Id;
+
+            if (_activeTask != null && _activeTask.Id == taskId)
             {
                 _activeTask = null;
             }
 
-            _tasks.Remove(task);
+            if (_botaoSelecionado != null && _botaoSelecionado.Tag is TaskModel selecionada && selecionada.Id == taskId)
+            {
+                _botaoSelecionado = null;
+            }
 
-            Button buttonToRemove = null;
+            var taskNaLista = _tasks.FirstOrDefault(t => t.Id == taskId);
+            if (taskNaLista != null)
+            {
+                _tasks.Remove(taskNaLista);
+            }
+
+            Control controleToRemove = null;
 
             foreach (Control control in flpTasks.Controls)
             {
-                if (control is Button button &&
-                    button.Tag is TaskModel t &&
-                    t.Id == task.Id)
+                if (control is Panel panel &&
+                    panel.Tag is TaskModel t &&
+                    t.Id == taskId)
                 {
-                    buttonToRemove = button;
+                    controleToRemove = panel;
                     break;
                 }
             }
 
-            if (buttonToRemove != null)
+            if (controleToRemove != null)
             {
-                flpTasks.Controls.Remove(buttonToRemove);
-                buttonToRemove.Dispose();
+                flpTasks.Controls.Remove(controleToRemove);
+                controleToRemove.Dispose();
             }
 
             _repository.SalvarTarefas(_tasks);
