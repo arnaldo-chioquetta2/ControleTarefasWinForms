@@ -107,7 +107,4 @@
     <Content Include="icone.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <ItemGroup>
-    <Compile Include="Models\Tarefa.cs" />
-  </ItemGroup>
 </Project>
