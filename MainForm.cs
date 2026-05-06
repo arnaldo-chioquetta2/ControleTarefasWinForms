@@ -229,7 +229,7 @@ namespace ControleTarefasWinForms
             Debug.WriteLine($"[Drag] DoDragDrop START → Task Id={task.Id}, Name={task.Name}");
 
             _dragArmed = false;
-            btn.DoDragDrop(btn, DragDropEffects.Move);
+            btn.DoDragDrop(task, DragDropEffects.Move);
         }
 
         #endregion
@@ -960,17 +960,17 @@ namespace ControleTarefasWinForms
         {
             Debug.WriteLine("[DragOver] chamado");
 
-            if (!e.Data.GetDataPresent(typeof(Button)))
+            if (!e.Data.GetDataPresent(typeof(TaskModel)))
             {
                 Debug.WriteLine("[DragOver] Data não é Button");
                 e.Effect = DragDropEffects.None;
                 return;
             }
 
-            var draggedButton = e.Data.GetData(typeof(Button)) as Button;
-            Debug.WriteLine($"[DragOver] DraggedButton ok? {draggedButton != null}");
+            var draggedTask = e.Data.GetData(typeof(TaskModel)) as TaskModel;
+            Debug.WriteLine($"[DragOver] DraggedTask ok? {draggedTask != null}");
 
-            if (!EhBotaoDeTarefa(draggedButton))
+            if (draggedTask == null)
             {
                 Debug.WriteLine("[DragOver] DraggedButton NÃO é tarefa");
                 e.Effect = DragDropEffects.None;
@@ -979,6 +979,7 @@ namespace ControleTarefasWinForms
 
             Point point = flpTasks.PointToClient(new Point(e.X, e.Y));
             Control target = flpTasks.GetChildAtPoint(point);
+            target = ObterControleRaizDaTarefa(target);
 
             Debug.WriteLine($"[DragOver] Target = {target?.GetType().Name ?? "null"}");
 
@@ -996,27 +997,43 @@ namespace ControleTarefasWinForms
 
         private bool EhBotaoDeTarefa(Control control)
         {
-            return control is Button btn && btn.Tag is TaskModel;
+            return ObterTarefaDeControle(control) != null;
+        }
+
+        private Control ObterControleRaizDaTarefa(Control control)
+        {
+            while (control != null && !(control.Tag is TaskModel))
+            {
+                control = control.Parent;
+            }
+
+            return control;
+        }
+
+        private TaskModel ObterTarefaDeControle(Control control)
+        {
+            control = ObterControleRaizDaTarefa(control);
+            return control?.Tag as TaskModel;
         }
 
         private void FlpTasks_DragDrop(object sender, DragEventArgs e)
         {
             Debug.WriteLine("[DragDrop] chamado");
 
-            var draggedButton = e.Data.GetData(typeof(Button)) as Button;
-            Debug.WriteLine($"[DragDrop] DraggedButton null? {draggedButton == null}");
+            var draggedTask = e.Data.GetData(typeof(TaskModel)) as TaskModel;
+            Debug.WriteLine($"[DragDrop] DraggedTask null? {draggedTask == null}");
 
-            if (!EhBotaoDeTarefa(draggedButton))
+            if (draggedTask == null)
             {
                 Debug.WriteLine("[DragDrop] DraggedButton NÃO é tarefa");
                 return;
             }
 
-            var draggedTask = draggedButton.Tag as TaskModel;
             Debug.WriteLine($"[DragDrop] DraggedTask Id={draggedTask?.Id}");
 
             Point point = flpTasks.PointToClient(new Point(e.X, e.Y));
             Control target = flpTasks.GetChildAtPoint(point);
+            target = ObterControleRaizDaTarefa(target);
 
             Debug.WriteLine($"[DragDrop] Target = {target?.GetType().Name ?? "null"}");
 
@@ -1026,7 +1043,7 @@ namespace ControleTarefasWinForms
                 return;
             }
 
-            var targetTask = (target as Button)?.Tag as TaskModel;
+            var targetTask = ObterTarefaDeControle(target);
             Debug.WriteLine($"[DragDrop] TargetTask Id={targetTask?.Id}");
 
             bool draggedIsDisabled = draggedTask.State == TaskState.Desabilitada;
